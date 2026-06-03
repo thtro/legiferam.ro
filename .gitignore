@@ -18,6 +18,7 @@ node_modules/
 dist/
 .vite/
 *.local
+*.tsbuildinfo
 
 # Build / runtime artifacts
 *.log
