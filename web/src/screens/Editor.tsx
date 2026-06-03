@@ -987,6 +987,21 @@ const MOTIVE_EXAMPLES: { ref: string; text: string; url: string }[] = [
   },
 ];
 
+// AI motive drafts persist in localStorage (per project) until accepted/ignored, so
+// they survive navigating away from the page or a reload.
+const motiveDraftKey = (projectId: number) => `legiferam_motive_drafts_${projectId}`;
+function loadMotiveDrafts(projectId: number): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(motiveDraftKey(projectId)) || "{}");
+  } catch {
+    return {};
+  }
+}
+function persistMotiveDrafts(projectId: number, drafts: Record<string, string>) {
+  if (Object.keys(drafts).length === 0) localStorage.removeItem(motiveDraftKey(projectId));
+  else localStorage.setItem(motiveDraftKey(projectId), JSON.stringify(drafts));
+}
+
 function MotivesStep({
   motives,
   canEdit,
@@ -1001,13 +1016,23 @@ function MotivesStep({
   const build = () => MOTIVE_FIELDS.map((f) => ({ section: f.key, body: motives.find((m) => m.section === f.key)?.body ?? "" }));
   const [draft, setDraft] = useState(build);
   const [dirty, setDirty] = useState(false);
-  const [aiDrafts, setAiDrafts] = useState<Record<string, string>>({});
+  const [aiDrafts, setAiDrafts] = useState<Record<string, string>>(() => loadMotiveDrafts(projectId));
   const [drafting, setDrafting] = useState(false);
   useEffect(() => {
     setDraft(build());
     setDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [motives]);
+  // Reload cached drafts when switching projects.
+  useEffect(() => {
+    setAiDrafts(loadMotiveDrafts(projectId));
+  }, [projectId]);
+
+  // Set drafts in state AND persist to localStorage in one place.
+  const updateAiDrafts = (next: Record<string, string>) => {
+    setAiDrafts(next);
+    persistMotiveDrafts(projectId, next);
+  };
 
   const setBody = (section: string, body: string) => {
     setDraft((d) => d.map((x) => (x.section === section ? { ...x, body } : x)));
@@ -1021,10 +1046,14 @@ function MotivesStep({
     setDrafting(true);
     try {
       const res = await api.motivesDraft(projectId);
-      setAiDrafts(res.sections);
+      updateAiDrafts(res.sections);
     } finally {
       setDrafting(false);
     }
+  };
+  const dropDraft = (key: string) => {
+    const { [key]: _removed, ...rest } = aiDrafts;
+    updateAiDrafts(rest);
   };
   const acceptDraft = (key: string) => {
     const text = aiDrafts[key];
@@ -1033,10 +1062,7 @@ function MotivesStep({
     setDraft(next);
     setDirty(true);
     onSave(next); // single save, outside any state updater (StrictMode-safe)
-    setAiDrafts((a) => {
-      const { [key]: _removed, ...rest } = a;
-      return rest;
-    });
+    dropDraft(key); // remove accepted draft from cache
   };
 
   return (
@@ -1096,7 +1122,7 @@ function MotivesStep({
                   <Btn variant="primary" size="sm" icon="check" onClick={() => acceptDraft(f.key)}>
                     Acceptă
                   </Btn>
-                  <Btn variant="ghost" size="sm" icon="x" onClick={() => setAiDrafts((a) => { const { [f.key]: _x, ...rest } = a; return rest; })}>
+                  <Btn variant="ghost" size="sm" icon="x" onClick={() => dropDraft(f.key)}>
                     Respinge
                   </Btn>
                 </div>
