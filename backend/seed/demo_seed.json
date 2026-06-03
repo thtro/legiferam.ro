@@ -1,0 +1,129 @@
+{
+  "_comment": "DEMO seed for Legiferam.ro — derived 1:1 from the design's data.jsx. Loaded by scripts/seed.py with is_demo=true. Resettable; never hardcoded in the frontend.",
+  "users": [
+    { "username": "ana.munteanu", "display_name": "Ana Munteanu", "initials": "AM", "provider": "local" },
+    { "username": "radu.pavel", "display_name": "Radu Pavel", "initials": "RP", "provider": "local" },
+    { "username": "ioana.d", "display_name": "Ioana D.", "initials": "ID", "provider": "local" },
+    { "username": "mihai.v", "display_name": "Mihai V.", "initials": "MV", "provider": "local" }
+  ],
+  "main_project": {
+    "slug": "transparenta-preturilor-medicamentelor-compensate",
+    "title": "Lege privind transparența prețurilor medicamentelor compensate",
+    "act_type": "lege-ordinara",
+    "status": "in-lucru",
+    "domain": "Sănătate",
+    "curator_username": "ana.munteanu",
+    "supporters": 1284,
+    "watchers": 312,
+    "vigoare_days": 30,
+    "articles": [
+      {
+        "num": 1,
+        "title": "Obiectul legii",
+        "single_idea": true,
+        "alineate": [
+          "Prezenta lege stabilește obligația farmaciilor de a afișa, în mod vizibil și inteligibil, prețul de vânzare și nivelul de compensare pentru medicamentele compensate din Lista de medicamente aprobată prin hotărâre a Guvernului."
+        ]
+      },
+      {
+        "num": 2,
+        "title": "Definiții",
+        "single_idea": true,
+        "alineate": [
+          "În înțelesul prezentei legi, termenii de mai jos au următoarea semnificație:",
+          "medicament compensat — medicamentul pentru care o parte din preț este suportată din Fondul național unic de asigurări sociale de sănătate;",
+          "preț de referință — prețul maxim până la care se acordă compensarea pentru un medicament sau o grupă de medicamente echivalente;",
+          "afișare vizibilă — prezentarea informației la punctul de eliberare, lizibilă fără solicitare suplimentară din partea pacientului."
+        ]
+      },
+      {
+        "num": 3,
+        "title": "Obligația de afișare",
+        "single_idea": false,
+        "alineate": [
+          "Farmaciile cu circuit deschis afișează, pentru fiecare medicament compensat, prețul de vânzare cu amănuntul, prețul de referință și valoarea compensată.",
+          "Informația prevăzută la alin. (1) se actualizează în termen de 48 de ore de la modificarea Listei de medicamente.",
+          "Farmaciile pun la dispoziția pacientului, la cerere, un bon informativ care detaliază componentele prețului."
+        ]
+      }
+    ],
+    "motives": [
+      { "section": "problema", "body": "Pacienții nu cunosc, la momentul cumpărării, cât din prețul unui medicament compensat este suportat de stat și cât plătesc ei efectiv. Lipsa transparenței face dificilă alegerea informată și compararea între farmacii." },
+      { "section": "solutie", "body": "Legea obligă farmaciile să afișeze vizibil prețul de vânzare, prețul de referință și valoarea compensată, actualizate la zi, la punctul de eliberare." },
+      { "section": "efecte", "body": "Mai multă transparență pentru pacienți, presiune competitivă pe adaosul comercial și o bază de date publică despre prețuri reale." }
+    ],
+    "contributors": [
+      { "username": "ana.munteanu", "name": "Ana Munteanu", "initials": "AM", "role": "Curator", "color": "#1e3a5f" },
+      { "username": "radu.pavel", "name": "Radu Pavel", "initials": "RP", "role": "Co-autor", "color": "#2f7d5b" },
+      { "username": "ioana.d", "name": "Ioana D.", "initials": "ID", "role": "Contribuitor", "color": "#b8801f" },
+      { "username": "mihai.v", "name": "Mihai V.", "initials": "MV", "role": "Contribuitor", "color": "#7a4ea0" }
+    ],
+    "similar_laws": [
+      { "ref": "Legea nr. 95/2006", "title": "privind reforma în domeniul sănătății", "match": "Domeniu conex" },
+      { "ref": "OUG nr. 77/2011", "title": "privind contribuția pentru medicamente", "match": "Mecanism de compensare" },
+      { "ref": "Legea nr. 134/2019", "title": "privind reorganizarea ANMDMR", "match": "Autoritate competentă" }
+    ],
+    "semantic_checklist": [
+      { "check_id": 1, "state": "ok", "detail": "Titlul indică exact obiectul reglementării." },
+      { "check_id": 4, "state": "ok", "detail": "Art. 2 definește 3 termeni esențiali." },
+      { "check_id": 5, "state": "warn", "detail": "Art. 3 pare să conțină mai multe obligații distincte." },
+      { "check_id": 6, "state": "ok", "detail": "Obligațiile din Art. 3 sunt acoperite de Art. 5." },
+      { "check_id": 7, "state": "ok", "detail": "Cuantumul amenzilor este rezonabil pentru tipul faptei." },
+      { "check_id": 9, "state": "ok", "detail": "Articolele nu se contrazic între ele." },
+      { "check_id": 10, "state": "todo", "detail": "Încă nu am verificat dacă textul e ușor de înțeles." }
+    ],
+    "amendments": [
+      {
+        "article_num": 3,
+        "article_title": "Obligația de afișare",
+        "author_username": "radu.pavel",
+        "author_name": "Radu Pavel",
+        "author_initials": "RP",
+        "author_color": "#2f7d5b",
+        "summary": "Termen 48h → 72h + afișare electronică",
+        "reason": "Termenul de 48 de ore este greu de respectat pentru farmaciile mici, care actualizează manual. Propun 72 de ore, aliniat cu termenul din Legea 95/2006, și adaug afișarea online ca alternativă acceptată.",
+        "status": "pending",
+        "when_label": "ieri, 16:40",
+        "ops": [
+          { "n": 1, "kind": "unchanged", "text": "Farmaciile cu circuit deschis afișează, pentru fiecare medicament compensat, prețul de vânzare cu amănuntul, prețul de referință și valoarea compensată.", "text_del": "", "text_ins": "", "text_end": "" },
+          { "n": 2, "kind": "mixed", "text": "Informația prevăzută la alin. (1) se actualizează în termen de ", "text_del": "48 de ore", "text_ins": "72 de ore", "text_end": " de la modificarea Listei de medicamente." },
+          { "n": 3, "kind": "ins", "text": "Afișarea se poate realiza și prin mijloace electronice, la punctul de eliberare, dacă informația rămâne lizibilă și accesibilă pacientului fără solicitare.", "text_del": "", "text_ins": "", "text_end": "" }
+        ]
+      },
+      {
+        "article_num": 5,
+        "article_title": "Sancțiuni",
+        "author_username": "ioana.d",
+        "author_name": "Ioana D.",
+        "author_initials": "ID",
+        "author_color": "#b8801f",
+        "summary": "Reducerea cuantumului amenzii minime",
+        "reason": "Pentru farmaciile mici, amenda minimă propusă este disproporționată. Propun reducerea acesteia pentru prima abatere.",
+        "status": "pending",
+        "when_label": "acum 3 zile",
+        "ops": []
+      },
+      {
+        "article_num": 2,
+        "article_title": "Definiții",
+        "author_username": "mihai.v",
+        "author_name": "Mihai V.",
+        "author_initials": "MV",
+        "author_color": "#7a4ea0",
+        "summary": "Definiție suplimentară pentru „bon informativ”",
+        "reason": "Termenul „bon informativ” apare în Art. 3 dar nu este definit. Propun adăugarea unei definiții în Art. 2.",
+        "status": "pending",
+        "when_label": "acum 4 zile",
+        "ops": []
+      }
+    ]
+  },
+  "discover_projects": [
+    { "slug": "dreptul-la-reparatie-aparatura-electronica", "title": "Dreptul la reparație pentru aparatura electronică", "act_type": "lege-ordinara", "status": "candidat", "domain": "Consumatori", "supporters": 3920, "score": 11 },
+    { "slug": "acces-public-contractele-institutiilor-de-stat", "title": "Acces public la contractele instituțiilor de stat", "act_type": "lege-ordinara", "status": "in-lucru", "domain": "Transparență", "supporters": 842, "score": 6 },
+    { "slug": "reguli-zone-de-liniste-orase", "title": "Reguli clare pentru zonele de liniște din orașe", "act_type": "lege-ordinara", "status": "schita", "domain": "Mediu", "supporters": 318, "score": 4 },
+    { "slug": "protejarea-spatiilor-verzi-intravilan", "title": "Protejarea spațiilor verzi din intravilan", "act_type": "lege-ordinara", "status": "in-lucru", "domain": "Mediu", "supporters": 2104, "score": 9 },
+    { "slug": "decontarea-transportului-elevi-navetisti", "title": "Decontarea transportului pentru elevi navetiști", "act_type": "lege-ordinara", "status": "candidat", "domain": "Educație", "supporters": 5611, "score": 12 }
+  ],
+  "domains": ["Toate domeniile", "Sănătate", "Educație", "Mediu", "Transparență", "Consumatori"]
+}
