@@ -10,6 +10,38 @@ export interface ChecklistItem {
   label: string;
   detail: string;
   kind: string; // determinist | semantic | determinist+semantic
+  ignored: boolean;
+}
+
+export interface DiffOp {
+  n: number;
+  kind: "unchanged" | "ins" | "mixed";
+  text: string;
+  text_del: string;
+  text_ins: string;
+  text_end: string;
+}
+
+export interface ProjectEvent {
+  kind: string;
+  summary: string;
+  actor_name: string;
+  actor_initials: string;
+  diff: { title: string; ops: DiffOp[] } | null;
+  when: string;
+}
+
+export interface MyProject {
+  id: number;
+  slug: string;
+  title: string;
+  act_type: ActType;
+  status: ProjectStatus;
+  is_published: boolean;
+  role: string;
+  passed: number;
+  total: number;
+  updated_label: string;
 }
 
 export interface Article {
@@ -38,19 +70,15 @@ export interface SimilarLaw {
   match: string;
 }
 
-export interface AmendmentOp {
-  n: number;
-  kind: "unchanged" | "ins" | "mixed";
-  text: string;
-  text_del: string;
-  text_ins: string;
-  text_end: string;
-}
+export type AmendmentOp = DiffOp;
 
 export interface Amendment {
   id: number;
   article_num: number;
   article_title: string;
+  target_article_id: number | null;
+  proposed_title: string;
+  proposed_alineate: string[];
   author_name: string;
   author_initials: string;
   author_color: string;
@@ -58,6 +86,7 @@ export interface Amendment {
   reason: string;
   status: string;
   when_label: string;
+  decision_reason: string;
   ops: AmendmentOp[];
 }
 
@@ -74,6 +103,9 @@ export interface ProjectDetail {
   watchers: number;
   updated_label: string;
   is_demo: boolean;
+  is_published: boolean;
+  viewer_can_edit: boolean;
+  viewer_is_curator: boolean;
   vigoare_days: number | null;
   passed: number;
   total: number;
@@ -83,6 +115,7 @@ export interface ProjectDetail {
   similar_laws: SimilarLaw[];
   checklist: ChecklistItem[];
   amendments: Amendment[];
+  events: ProjectEvent[];
 }
 
 export interface ProjectSummary {

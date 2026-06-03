@@ -1,7 +1,46 @@
 // Shared app chrome — top navigation for non-editor screens. Brand: Legiferam.ro.
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../lib/api";
 import { useApp } from "../lib/app-context";
 import { Avatar, Btn, Icon } from "./ui";
+
+function UserMenu() {
+  const navigate = useNavigate();
+  const { user, setUser } = useApp();
+  const [open, setOpen] = useState(false);
+  if (!user) return <Avatar initials="TU" color="var(--navy-700)" size={32} />;
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen((v) => !v)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+        <Avatar initials={user.initials || "TU"} color="var(--navy-700)" size={32} />
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
+          <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 50, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r)", boxShadow: "var(--sh-3)", width: 220, overflow: "hidden" }}>
+            <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink)" }}>{user.display_name}</div>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>{user.email}</div>
+            </div>
+            <button
+              onClick={() => { setOpen(false); navigate("/proiectele-mele"); }}
+              style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 14px", fontSize: 13, color: "var(--ink-2)", cursor: "pointer" }}
+            >
+              Proiectele mele
+            </button>
+            <button
+              onClick={async () => { await api.logout().catch(() => {}); setUser(null); setOpen(false); navigate("/"); }}
+              style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 14px", fontSize: 13, color: "var(--alert)", cursor: "pointer", borderTop: "1px solid var(--border)" }}
+            >
+              Ieși din cont
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function Brand({ onClick }: { onClick?: () => void }) {
   return (
@@ -37,7 +76,7 @@ export function TopNav({ active }: { active?: "landing" | "project" }) {
   const { user, demoMode, setDemoMode } = useApp();
   const links = [
     { id: "landing", label: "Explorează", to: "/" },
-    { id: "project", label: "Proiectul meu", to: "/proiect/transparenta-preturilor-medicamentelor-compensate" },
+    { id: "project", label: "Proiectele mele", to: "/proiectele-mele" },
   ];
   return (
     <header
@@ -107,7 +146,13 @@ export function TopNav({ active }: { active?: "landing" | "project" }) {
         <Btn variant="primary" size="sm" icon="plus" onClick={() => navigate("/editor-nou")}>
           Începe un proiect
         </Btn>
-        <Avatar initials={user?.initials || "TU"} color="var(--navy-700)" size={32} />
+        {user ? (
+          <UserMenu />
+        ) : (
+          <Btn variant="ghost" size="sm" onClick={() => navigate("/login")}>
+            Autentificare
+          </Btn>
+        )}
       </div>
     </header>
   );

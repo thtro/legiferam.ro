@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import select
@@ -134,6 +135,8 @@ def create_main_project(db: Session, data: dict, users: dict[str, User]) -> Proj
         supporters=data["supporters"],
         watchers=data["watchers"],
         vigoare_days=data.get("vigoare_days"),
+        # The showcase law is published so its amendment flow displays end-to-end.
+        published_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
         is_demo=True,
     )
     db.add(project)

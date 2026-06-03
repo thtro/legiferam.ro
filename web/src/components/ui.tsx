@@ -1,7 +1,7 @@
 // Design-system primitives, ported 1:1 from the prototype's ui.jsx.
 import type { CSSProperties, ReactNode } from "react";
 import { ACT_TYPES, STATUSES } from "../lib/constants";
-import type { ActType, CheckState, ChecklistItem, ProjectStatus } from "../lib/types";
+import type { ActType, ChecklistItem, ProjectStatus } from "../lib/types";
 
 // ---------- Icons (stroke set, currentColor) ----------
 const ICON_PATHS: Record<string, string> = {
@@ -309,10 +309,10 @@ export function ComplianceBar({
   onExpand?: () => void;
   expandable?: boolean;
 }) {
-  const passed = checklist.filter((c) => c.state === "ok").length;
+  const passed = checklist.filter((c) => c.state === "ok" || c.ignored).length;
   const total = checklist.length;
-  const colorFor = (s: CheckState) =>
-    s === "ok" ? "var(--ok)" : s === "warn" ? "var(--warn)" : s === "alert" ? "var(--alert)" : "transparent";
+  const colorFor = (c: ChecklistItem) =>
+    c.ignored ? "var(--border-3)" : c.state === "ok" ? "var(--ok)" : c.state === "warn" ? "var(--warn)" : c.state === "alert" ? "var(--alert)" : "transparent";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 6 : 9 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
@@ -332,8 +332,8 @@ export function ComplianceBar({
               flex: 1,
               height: compact ? 7 : 9,
               borderRadius: 3,
-              background: c.state === "todo" ? "var(--paper-2)" : colorFor(c.state),
-              border: c.state === "todo" ? "1px solid var(--border-2)" : "none",
+              background: c.state === "todo" && !c.ignored ? "var(--paper-2)" : colorFor(c),
+              border: c.state === "todo" && !c.ignored ? "1px solid var(--border-2)" : "none",
               transformOrigin: "left",
               animation: `lf-fill .5s ${i * 0.03}s both cubic-bezier(.2,.7,.2,1)`,
             }}

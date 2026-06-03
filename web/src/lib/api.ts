@@ -6,6 +6,7 @@ import type {
   Article,
   ChecklistItem,
   CopilotReply,
+  MyProject,
   ProjectDetail,
   ProjectSummary,
   User,
@@ -80,6 +81,25 @@ export const api = {
   copilot: (body: { project_id?: number; action?: string; text?: string }) =>
     req<CopilotReply>("/ai/copilot", { method: "POST", body: JSON.stringify(body) }),
 
-  // Amendments (read-only round 1)
+  // My projects + lifecycle
+  myProjects: () => req<MyProject[]>("/projects/mine"),
+  publishProject: (slugOrId: string | number) =>
+    req<ProjectDetail>(`/projects/${slugOrId}/publish`, { method: "POST" }),
+  addCoauthor: (slugOrId: string | number, email: string) =>
+    req<ProjectDetail>(`/projects/${slugOrId}/coauthors`, { method: "POST", body: JSON.stringify({ email }) }),
+  ignoreCheck: (slugOrId: string | number, checkId: number) =>
+    req<ChecklistItem[]>(`/projects/${slugOrId}/checks/${checkId}/ignore`, { method: "POST" }),
+  unignoreCheck: (slugOrId: string | number, checkId: number) =>
+    req<ChecklistItem[]>(`/projects/${slugOrId}/checks/${checkId}/ignore`, { method: "DELETE" }),
+
+  // Amendments
   getAmendment: (id: number) => req<Amendment>(`/amendments/${id}`),
+  proposeAmendment: (body: {
+    target_article_id: number;
+    proposed_title: string;
+    proposed_alineate: string[];
+    reason: string;
+  }) => req<Amendment>("/amendments", { method: "POST", body: JSON.stringify(body) }),
+  decideAmendment: (id: number, decision: "accept" | "reject", reason: string) =>
+    req<Amendment>(`/amendments/${id}/decision`, { method: "POST", body: JSON.stringify({ decision, reason }) }),
 };

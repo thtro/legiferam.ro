@@ -2,9 +2,25 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DemoBanner, PublicBanner, TopNav } from "../components/chrome";
 import { ValidatorCard, VAL_TONES } from "../components/cards";
+import { DiffView } from "../components/diff";
 import { ActBadge, Avatar, Btn, ComplianceRing, Icon, StatusBadge } from "../components/ui";
 import { api } from "../lib/api";
-import type { ProjectDetail } from "../lib/types";
+import { useApp } from "../lib/app-context";
+import type { Amendment, Article, ProjectDetail, ProjectEvent } from "../lib/types";
+
+const EVENT_LABEL: Record<string, string> = {
+  created: "a creat proiectul",
+  added_article: "a adăugat un articol",
+  edited_article: "a modificat un articol",
+  deleted_article: "a șters un articol",
+  published: "a publicat proiectul",
+  set_vigoare: "a stabilit intrarea în vigoare",
+  edited_motives: "a actualizat expunerea de motive",
+  added_coauthor: "a adăugat un co-inițiator",
+  amendment_proposed: "a propus un amendament",
+  amendment_accepted: "a acceptat un amendament",
+  amendment_rejected: "a respins un amendament",
+};
 
 export function Dotted() {
   return <span style={{ width: 3, height: 3, borderRadius: 99, background: "var(--border-3)" }} />;
@@ -20,8 +36,14 @@ const SECTION_LABELS: Record<string, string> = {
 export default function ProjectScreen() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const { user } = useApp();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [tab, setTab] = useState("text");
+
+  const reload = () => {
+    if (slug) return api.getProject(slug).then(setProject);
+    return Promise.resolve();
+  };
 
   useEffect(() => {
     if (slug) api.getProject(slug).then(setProject).catch(() => setProject(null));
@@ -134,9 +156,9 @@ export default function ProjectScreen() {
 
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "26px 32px 60px", display: "grid", gridTemplateColumns: "1fr 300px", gap: 28, alignItems: "start" }}>
           <div>
-            {tab === "text" && <LawDocument project={project} />}
+            {tab === "text" && <LawDocument project={project} loggedIn={!!user} onReload={reload} />}
             {tab === "motive" && <MotiveTab project={project} />}
-            {tab === "amend" && <AmendListTab project={project} onOpen={(id) => navigate(`/amendament/${id}`)} />}
+            {tab === "amend" && <AmendListTab project={project} onReload={reload} />}
             {tab === "discutii" && <DiscussEmpty />}
             {tab === "istoric" && <HistoryTab project={project} />}
           </div>
@@ -147,9 +169,17 @@ export default function ProjectScreen() {
   );
 }
 
-function LawDocument({ project }: { project: ProjectDetail }) {
+function LawDocument({
+  project,
+  loggedIn,
+  onReload,
+}: {
+  project: ProjectDetail;
+  loggedIn: boolean;
+  onReload: () => Promise<void>;
+}) {
   const navigate = useNavigate();
-  const firstAmendId = project.amendments[0]?.id;
+  const [editing, setEditing] = useState<number | null>(null); // article id being amended
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", padding: "40px 48px" }}>
       <div style={{ textAlign: "center", marginBottom: 30, paddingBottom: 24, borderBottom: "1px solid var(--border)" }}>
@@ -167,27 +197,118 @@ function LawDocument({ project }: { project: ProjectDetail }) {
               {al}
             </p>
           ))}
-          <button
-            onClick={() => firstAmendId && navigate(`/amendament/${firstAmendId}`)}
-            style={{
-              marginTop: 4,
-              background: "none",
-              border: "1px solid var(--border)",
-              borderRadius: 99,
-              padding: "5px 12px",
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: "var(--blue)",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <Icon name="branch" size={14} /> Propune o modificare
-          </button>
+          {editing === art.id ? (
+            <ProposeForm
+              article={art}
+              onCancel={() => setEditing(null)}
+              onSubmitted={async () => {
+                setEditing(null);
+                await onReload();
+              }}
+            />
+          ) : (
+            <button
+              onClick={() => {
+                if (!loggedIn) return navigate("/login");
+                if (!project.is_published) return;
+                if (project.viewer_can_edit) return; // initiators edit directly, don't amend
+                setEditing(art.id);
+              }}
+              title={!project.is_published ? "Disponibil după publicarea legii" : project.viewer_can_edit ? "Ești inițiator — editează direct" : ""}
+              disabled={!project.is_published || project.viewer_can_edit}
+              style={{
+                marginTop: 4,
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: 99,
+                padding: "5px 12px",
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: !project.is_published || project.viewer_can_edit ? "var(--faint)" : "var(--blue)",
+                cursor: !project.is_published || project.viewer_can_edit ? "default" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Icon name="branch" size={14} /> Propune o modificare
+            </button>
+          )}
         </div>
       ))}
+      {!loggedIn && (
+        <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>
+          <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", color: "var(--blue)", fontWeight: 600, cursor: "pointer", padding: 0 }}>Autentifică-te</button> ca să propui modificări.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProposeForm({ article, onCancel, onSubmitted }: { article: Article; onCancel: () => void; onSubmitted: () => void }) {
+  const [alineate, setAlineate] = useState<string[]>(article.alineate.length ? article.alineate : [""]);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!reason.trim()) return setErr("Justificarea este obligatorie.");
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.proposeAmendment({
+        target_article_id: article.id,
+        proposed_title: article.title,
+        proposed_alineate: alineate.filter((a) => a.trim() !== "" || true),
+        reason: reason.trim(),
+      });
+      onSubmitted();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 10, background: "var(--surface-2)", border: "1px solid var(--border-2)", borderRadius: "var(--r)", padding: 16 }}>
+      <div style={{ fontFamily: "var(--sans)", fontSize: 13, fontWeight: 700, color: "var(--ink)", marginBottom: 10 }}>Propune o modificare la Art. {article.num}</div>
+      {alineate.map((al, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 8 }}>
+          <span style={{ fontFamily: "var(--serif)", color: "var(--muted)", fontWeight: 600, paddingTop: 8 }}>({i + 1})</span>
+          <textarea
+            value={al}
+            onChange={(e) => setAlineate((a) => a.map((x, j) => (j === i ? e.target.value : x)))}
+            rows={2}
+            style={{ flex: 1, fontFamily: "var(--serif)", fontSize: 15, lineHeight: 1.6, border: "1px solid var(--border-2)", borderRadius: 6, padding: "6px 8px", background: "var(--surface)", resize: "vertical", outline: "none" }}
+          />
+          {alineate.length > 1 && (
+            <button onClick={() => setAlineate((a) => a.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: "var(--faint)", cursor: "pointer", paddingTop: 6 }}>
+              <Icon name="x" size={14} />
+            </button>
+          )}
+        </div>
+      ))}
+      <button onClick={() => setAlineate((a) => [...a, ""])} style={{ background: "none", border: "none", color: "var(--blue)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "2px 0 10px" }}>
+        <Icon name="plus" size={13} /> Adaugă alineat
+      </button>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", margin: "4px 0 6px" }}>De ce propui asta? (obligatoriu)</div>
+      <textarea
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        rows={2}
+        placeholder="Explică pe scurt motivul modificării…"
+        style={{ width: "100%", fontFamily: "var(--sans)", fontSize: 13.5, lineHeight: 1.5, border: "1px solid var(--border-2)", borderRadius: 6, padding: "8px 10px", background: "var(--surface)", resize: "vertical", outline: "none" }}
+      />
+      {err && <div style={{ color: "var(--alert)", fontSize: 12.5, marginTop: 6 }}>{err}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <Btn variant="primary" size="sm" icon="branch" onClick={submit} disabled={busy}>
+          {busy ? "Se trimite…" : "Trimite propunerea"}
+        </Btn>
+        <Btn variant="ghost" size="sm" onClick={onCancel}>
+          Renunță
+        </Btn>
+      </div>
     </div>
   );
 }
@@ -209,40 +330,115 @@ function MotiveTab({ project }: { project: ProjectDetail }) {
   );
 }
 
-function AmendListTab({ project, onOpen }: { project: ProjectDetail; onOpen: (id: number) => void }) {
+const AMEND_STATUS: Record<string, { label: string; c: string; bg: string; line: string }> = {
+  pending: { label: "În așteptare", c: "var(--warn)", bg: "var(--warn-bg)", line: "var(--warn-line)" },
+  accepted: { label: "Acceptat", c: "var(--ok)", bg: "var(--ok-bg)", line: "var(--ok-line)" },
+  rejected: { label: "Respins", c: "var(--alert)", bg: "var(--alert-bg)", line: "var(--alert-line)" },
+};
+
+function AmendListTab({ project, onReload }: { project: ProjectDetail; onReload: () => Promise<void> }) {
+  if (project.amendments.length === 0) {
+    return (
+      <div style={{ background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r-lg)", padding: "48px 24px", textAlign: "center" }}>
+        <span style={{ width: 52, height: 52, borderRadius: 14, background: "var(--paper-2)", color: "var(--muted)", display: "inline-grid", placeItems: "center", marginBottom: 14 }}>
+          <Icon name="branch" size={24} />
+        </span>
+        <div style={{ fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Niciun amendament încă</div>
+        <p style={{ fontSize: 14, color: "var(--muted)", maxWidth: 400, margin: "8px auto 0", lineHeight: 1.55 }}>
+          {project.is_published
+            ? "Oricine autentificat poate propune o modificare din fila Text."
+            : "Amendamentele devin posibile după ce proiectul e publicat."}
+        </p>
+      </div>
+    );
+  }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {project.amendments.map((a, i) => (
-        <button
-          key={a.id}
-          onClick={() => onOpen(a.id)}
-          style={{ textAlign: "left", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", padding: "16px 18px", cursor: "pointer", display: "flex", gap: 14, alignItems: "center" }}
-        >
-          <Avatar initials={a.author_initials} color={a.author_color} size={36} />
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--navy)", fontFamily: "var(--serif)" }}>Art. {a.article_num}</span>
-              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>· {a.author_name} · {a.when_label}</span>
-            </div>
-            <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)", marginTop: 3 }}>{a.summary}</div>
-          </div>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: i === 0 ? "var(--warn)" : "var(--muted)",
-              background: i === 0 ? "var(--warn-bg)" : "var(--paper-2)",
-              border: "1px solid",
-              borderColor: i === 0 ? "var(--warn-line)" : "var(--border)",
-              borderRadius: 99,
-              padding: "4px 11px",
-            }}
-          >
-            {i === 0 ? "În așteptare" : "În discuție"}
-          </span>
-          <Icon name="chevron" size={17} style={{ color: "var(--faint)" }} />
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {project.amendments.map((a) => (
+        <AmendmentCard key={a.id} amendment={a} canDecide={project.viewer_is_curator} onReload={onReload} />
       ))}
+    </div>
+  );
+}
+
+function AmendmentCard({ amendment: a, canDecide, onReload }: { amendment: Amendment; canDecide: boolean; onReload: () => Promise<void> }) {
+  const [open, setOpen] = useState(a.status === "pending");
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const st = AMEND_STATUS[a.status] ?? AMEND_STATUS.pending;
+
+  const decide = async (decision: "accept" | "reject") => {
+    if (decision === "reject" && !reason.trim()) {
+      setRejecting(true);
+      setErr("Explică de ce respingi.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.decideAmendment(a.id, decision, reason.trim());
+      await onReload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", overflow: "hidden" }}>
+      <button onClick={() => setOpen((v) => !v)} style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "16px 18px", cursor: "pointer", display: "flex", gap: 14, alignItems: "center" }}>
+        <Avatar initials={a.author_initials} color={a.author_color} size={36} />
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--navy)", fontFamily: "var(--serif)" }}>Art. {a.article_num}</span>
+            <span style={{ fontSize: 12.5, color: "var(--muted)" }}>· {a.author_name} · {a.when_label}</span>
+          </div>
+          <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)", marginTop: 3 }}>{a.summary}</div>
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 700, color: st.c, background: st.bg, border: `1px solid ${st.line}`, borderRadius: 99, padding: "4px 11px" }}>{st.label}</span>
+        <Icon name={open ? "chevronD" : "chevron"} size={17} style={{ color: "var(--faint)" }} />
+      </button>
+      {open && (
+        <div style={{ padding: "0 18px 18px" }}>
+          {a.ops.length > 0 && <DiffView title={`Art. ${a.article_num}. — ${a.article_title}`} ops={a.ops} compact />}
+          <div style={{ display: "flex", gap: 8, marginTop: 12, padding: "12px 14px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r)" }}>
+            <Icon name="info" size={16} style={{ color: "var(--amber)", flex: "none", marginTop: 1 }} />
+            <div style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.55 }}>
+              <b>De ce:</b> {a.reason}
+              {a.decision_reason && (
+                <div style={{ marginTop: 6, color: "var(--muted)" }}>
+                  <b>Răspunsul curatorului:</b> {a.decision_reason}
+                </div>
+              )}
+            </div>
+          </div>
+          {canDecide && a.status === "pending" && (
+            <div style={{ marginTop: 12 }}>
+              {rejecting && (
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={2}
+                  placeholder="Explică de ce respingi amendamentul…"
+                  style={{ width: "100%", fontFamily: "var(--sans)", fontSize: 13.5, border: "1px solid var(--border-2)", borderRadius: 6, padding: "8px 10px", marginBottom: 8, resize: "vertical", outline: "none" }}
+                />
+              )}
+              {err && <div style={{ color: "var(--alert)", fontSize: 12.5, marginBottom: 8 }}>{err}</div>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn variant="ok" size="sm" icon="check" onClick={() => decide("accept")} disabled={busy}>
+                  Acceptă
+                </Btn>
+                <Btn variant="danger" size="sm" icon="x" onClick={() => decide("reject")} disabled={busy}>
+                  {rejecting ? "Confirmă respingerea" : "Respinge"}
+                </Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -266,23 +462,30 @@ function DiscussEmpty() {
 }
 
 function HistoryTab({ project }: { project: ProjectDetail }) {
-  const items = [
-    { who: project.curator || "Curator", what: "a actualizat Art. 3 — Obligația de afișare", when: "acum 2 ore", color: "var(--navy)", ini: project.curator_initials || "AM" },
-    { who: "Radu Pavel", what: "a propus un amendament la Art. 3", when: "ieri", color: "#2f7d5b", ini: "RP" },
-    { who: project.curator || "Curator", what: "a adăugat Art. 2 — Definiții", when: "acum 3 zile", color: "var(--navy)", ini: project.curator_initials || "AM" },
-    { who: project.curator || "Curator", what: "a creat proiectul", when: "acum 1 săptămână", color: "var(--navy)", ini: project.curator_initials || "AM" },
-  ];
+  const events: ProjectEvent[] = project.events ?? [];
+  if (events.length === 0) {
+    return (
+      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", padding: "40px 24px", textAlign: "center", color: "var(--muted)" }}>
+        Încă nu există istoric pentru acest proiect.
+      </div>
+    );
+  }
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", padding: "26px 28px" }}>
-      {items.map((it, i) => (
-        <div key={i} style={{ display: "flex", gap: 14, paddingBottom: i < items.length - 1 ? 20 : 0, position: "relative" }}>
-          {i < items.length - 1 && <span style={{ position: "absolute", left: 17, top: 38, bottom: 0, width: 2, background: "var(--border)" }} />}
-          <Avatar initials={it.ini} color={it.color} size={36} />
-          <div style={{ paddingTop: 2 }}>
+      {events.map((e, i) => (
+        <div key={i} style={{ display: "flex", gap: 14, paddingBottom: i < events.length - 1 ? 22 : 0, position: "relative" }}>
+          {i < events.length - 1 && <span style={{ position: "absolute", left: 17, top: 38, bottom: 0, width: 2, background: "var(--border)" }} />}
+          <Avatar initials={e.actor_initials || "··"} color="var(--navy)" size={36} />
+          <div style={{ paddingTop: 2, flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, color: "var(--ink)" }}>
-              <b>{it.who}</b> {it.what}
+              <b>{e.actor_name}</b> {e.summary || EVENT_LABEL[e.kind] || e.kind}
             </div>
-            <div style={{ fontSize: 12.5, color: "var(--faint)", marginTop: 3 }}>{it.when}</div>
+            <div style={{ fontSize: 12.5, color: "var(--faint)", marginTop: 3 }}>{e.when}</div>
+            {e.diff && e.diff.ops && e.diff.ops.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <DiffView title={e.diff.title} ops={e.diff.ops} compact />
+              </div>
+            )}
           </div>
         </div>
       ))}

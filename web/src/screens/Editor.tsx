@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AIProposalCard, ChecklistPanel, ValidatorCard } from "../components/cards";
+import { AIProposalCard, ChecklistPanel, ValidatorCard, VAL_TONES } from "../components/cards";
 import { ActBadge, Avatar, Btn, ComplianceBar, Eyebrow, Icon, StateMark, iconBtn } from "../components/ui";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app-context";
@@ -47,7 +47,7 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, slug]);
 
-  const passed = checklist.filter((c) => c.state === "ok").length;
+  const passed = checklist.filter((c) => c.state === "ok" || c.ignored).length;
   const total = checklist.length || 12;
   const canEdit = !!user && !project?.is_demo && !demoMode;
 
@@ -144,6 +144,16 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
       setSemanticBusy(false);
     }
   };
+  const ignoreCheck = async (checkId: number, ignored: boolean) => {
+    const updated = ignored ? await api.ignoreCheck(ps, checkId) : await api.unignoreCheck(ps, checkId);
+    setChecklist(updated);
+  };
+  const publish = async () => {
+    if (canEdit && !project.is_published) await api.publishProject(ps).then(() => reload(ps));
+  };
+  const addCoauthor = async (email: string) => {
+    await api.addCoauthor(ps, email).then(() => reload(ps));
+  };
 
   return (
     <EditorShell
@@ -160,6 +170,12 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
       setShowChecks={setShowChecks}
       onHome={() => navigate(`/proiect/${ps}`)}
       onPreview={() => navigate(`/proiect/${ps}`)}
+      isDraft={!project.is_published && !project.is_demo}
+      canEdit={canEdit}
+      isCurator={project.viewer_is_curator}
+      contributors={project.contributors}
+      onPublish={publish}
+      onAddCoauthor={addCoauthor}
       rail={
         <OutlineRail
           onStep={setActiveStep}
@@ -189,6 +205,7 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         canEdit={canEdit}
         checklist={checklist}
         onRunSemantic={runSemantic}
+        onIgnoreCheck={ignoreCheck}
         semanticBusy={semanticBusy}
         actType={project.act_type}
         onSetActType={setActTypeProj}
@@ -205,6 +222,70 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         onDeleteArticle={deleteArticle}
       />
     </EditorShell>
+  );
+}
+
+function CoauthorMenu({
+  contributors,
+  onAdd,
+}: {
+  contributors: { name: string; initials: string; role: string; color: string }[];
+  onAdd: (email: string) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!email.trim()) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await onAdd(email.trim());
+      setEmail("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{ position: "relative", flex: "none" }}>
+      <button onClick={() => setOpen((v) => !v)} title="Co-inițiatori" style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 99, padding: "5px 11px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)" }}>
+        <Icon name="user" size={14} /> {contributors.length}
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
+          <div style={{ position: "absolute", top: "calc(100% + 10px)", right: 0, zIndex: 50, width: 290, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-3)", padding: 14 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 10 }}>Inițiatori</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+              {contributors.map((c) => (
+                <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  <Avatar initials={c.initials} color={c.color} size={26} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{c.name}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted)" }}>{c.role}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>Adaugă co-inițiator (după email)</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                placeholder="email@exemplu.ro"
+                style={{ flex: 1, border: "1.5px solid var(--border-2)", borderRadius: 8, padding: "7px 9px", fontSize: 13, outline: "none" }}
+              />
+              <Btn variant="primary" size="sm" onClick={submit} disabled={busy}>
+                {busy ? "…" : "Adaugă"}
+              </Btn>
+            </div>
+            {err && <div style={{ color: "var(--alert)", fontSize: 12, marginTop: 8 }}>{err}</div>}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -225,6 +306,12 @@ function EditorShell({
   copilot,
   children,
   hideRail,
+  isDraft,
+  canEdit,
+  isCurator,
+  contributors,
+  onPublish,
+  onAddCoauthor,
 }: {
   title: string;
   onTitle?: (v: string) => void;
@@ -241,6 +328,12 @@ function EditorShell({
   copilot: React.ReactNode;
   children: React.ReactNode;
   hideRail?: boolean;
+  isDraft?: boolean;
+  canEdit?: boolean;
+  isCurator?: boolean;
+  contributors?: { name: string; initials: string; role: string; color: string }[];
+  onPublish?: () => void | Promise<void>;
+  onAddCoauthor?: (email: string) => void | Promise<void>;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--paper)" }}>
@@ -303,13 +396,25 @@ function EditorShell({
             </>
           )}
         </div>
+        {isDraft && (
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)", background: "var(--paper-2)", border: "1px solid var(--border-2)", borderRadius: 99, padding: "4px 11px", flex: "none" }}>
+            Schiță
+          </span>
+        )}
+        {isCurator && onAddCoauthor && <CoauthorMenu contributors={contributors ?? []} onAdd={onAddCoauthor} />}
         <div style={{ display: "flex", gap: 8 }}>
           <Btn variant="outline" size="sm" icon="eye" onClick={onPreview}>
             Previzualizează
           </Btn>
-          <Btn variant="primary" size="sm" icon="export">
-            Export
-          </Btn>
+          {isDraft && canEdit ? (
+            <Btn variant="accent" size="sm" icon="flag" onClick={onPublish}>
+              Publică
+            </Btn>
+          ) : (
+            <Btn variant="primary" size="sm" icon="export">
+              Export
+            </Btn>
+          )}
         </div>
       </header>
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
@@ -420,6 +525,7 @@ function CentreStage({
   canEdit,
   checklist,
   onRunSemantic,
+  onIgnoreCheck,
   semanticBusy,
   actType,
   onSetActType,
@@ -438,6 +544,7 @@ function CentreStage({
   canEdit: boolean;
   checklist: ChecklistItem[];
   onRunSemantic: () => void | Promise<void>;
+  onIgnoreCheck: (checkId: number, ignored: boolean) => void | Promise<void>;
   semanticBusy: boolean;
   actType: ActType;
   onSetActType: (t: ActType) => void | Promise<void>;
@@ -515,9 +622,17 @@ function CentreStage({
           <div style={{ height: 1, background: "var(--border)", margin: "16px 0" }} />
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {checklist
-              .filter((c) => c.state !== "ok")
+              .filter((c) => c.state !== "ok" || c.ignored)
               .map((c) => (
-                <ValidatorCard key={c.check_id} variant="inline" state={c.state === "warn" ? "warn" : c.state === "alert" ? "alert" : "warn"} title={c.label} text={c.detail} repair={c.state !== "todo"} />
+                <CheckRow
+                  key={c.check_id}
+                  check={c}
+                  canEdit={canEdit}
+                  semanticBusy={semanticBusy}
+                  onVerify={onRunSemantic}
+                  onIgnore={() => onIgnoreCheck(c.check_id, true)}
+                  onUnignore={() => onIgnoreCheck(c.check_id, false)}
+                />
               ))}
           </div>
           <div style={{ marginTop: 16, display: "flex", gap: 9 }}>
@@ -887,6 +1002,68 @@ function ArticleCard({
         <div style={{ padding: "0 16px 16px" }}>
           <ValidatorCard variant="soft" state="warn" repair title="Pare să conțină mai multe obligații" text="Acest articol pare să spună mai multe lucruri deodată. Le putem separa în articole proprii ca fiecare să fie clar." />
         </div>
+      )}
+    </div>
+  );
+}
+
+function CheckRow({
+  check,
+  canEdit,
+  semanticBusy,
+  onVerify,
+  onIgnore,
+  onUnignore,
+}: {
+  check: ChecklistItem;
+  canEdit: boolean;
+  semanticBusy: boolean;
+  onVerify: () => void | Promise<void>;
+  onIgnore: () => void | Promise<void>;
+  onUnignore: () => void | Promise<void>;
+}) {
+  const t = check.state === "ok" ? VAL_TONES.ok : check.state === "warn" ? VAL_TONES.warn : check.state === "alert" ? VAL_TONES.alert : null;
+  const isSemantic = check.kind !== "determinist";
+  if (check.ignored) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px", borderRadius: 99, background: "var(--paper-2)", border: "1px solid var(--border-2)" }}>
+        <Icon name="eye" size={14} style={{ color: "var(--faint)" }} />
+        <span style={{ fontSize: 13, color: "var(--muted)", textDecoration: "line-through" }}>{check.label}</span>
+        <span style={{ fontSize: 11.5, color: "var(--faint)", fontWeight: 600 }}>· ignorat</span>
+        {canEdit && (
+          <button onClick={onUnignore} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--blue)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            Anulează
+          </button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px 8px 10px", borderRadius: 10, background: t ? t.bg : "var(--surface-2)", border: `1px solid ${t ? t.line : "var(--border-2)"}` }}>
+      <span style={{ color: t ? t.c : "var(--faint)", display: "inline-flex" }}>
+        <Icon name={t ? t.icon : "circle"} size={15} stroke={2.4} />
+      </span>
+      <span style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500, lineHeight: 1.3, flex: 1 }}>
+        <b style={{ color: t ? t.c : "var(--muted)", fontWeight: 700 }}>{check.label}</b>
+        {check.detail ? ` — ${check.detail}` : ""}
+      </span>
+      {canEdit && isSemantic && (
+        <button
+          onClick={onVerify}
+          disabled={semanticBusy}
+          style={{ flex: "none", background: "#fff", border: `1px solid ${t ? t.line : "var(--border-2)"}`, color: t ? t.c : "var(--muted)", fontWeight: 600, fontSize: 12, padding: "4px 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer" }}
+        >
+          <Icon name="spark" size={12} /> Verifică cu AI
+        </button>
+      )}
+      {canEdit && (
+        <button
+          onClick={onIgnore}
+          title="Marchează ca fiind în regulă"
+          style={{ flex: "none", background: "transparent", border: "1px solid var(--border-2)", color: "var(--muted)", fontWeight: 600, fontSize: 12, padding: "4px 10px", borderRadius: 99, cursor: "pointer" }}
+        >
+          Ignoră
+        </button>
       )}
     </div>
   );
