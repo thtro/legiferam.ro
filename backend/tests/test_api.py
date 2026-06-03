@@ -43,6 +43,41 @@ def test_login_rejects_bad_credentials(seeded_client):
     assert seeded_client.post("/auth/login", json={"username": "demo", "password": "nope"}).status_code == 401
 
 
+def test_register_creates_user_and_logs_in(seeded_client):
+    r = seeded_client.post(
+        "/auth/register",
+        json={"email": "Ion.Ionescu@Example.com", "first_name": "Ion", "last_name": "Ionescu", "password": "secret1"},
+    )
+    assert r.status_code == 201
+    u = r.json()
+    assert u["email"] == "ion.ionescu@example.com"  # normalized lowercase
+    assert u["display_name"] == "Ion Ionescu" and u["initials"] == "II"
+    # auto-logged in by the register cookie
+    assert seeded_client.get("/auth/me").json()["email"] == "ion.ionescu@example.com"
+
+
+def test_register_duplicate_email_conflicts(seeded_client):
+    body = {"email": "dupe@example.com", "first_name": "A", "last_name": "B", "password": "secret1"}
+    assert seeded_client.post("/auth/register", json=body).status_code == 201
+    assert seeded_client.post("/auth/register", json=body).status_code == 409
+
+
+def test_register_rejects_short_password(seeded_client):
+    r = seeded_client.post(
+        "/auth/register", json={"email": "x@y.com", "first_name": "X", "last_name": "Y", "password": "123"}
+    )
+    assert r.status_code == 422
+
+
+def test_login_by_email_after_register(seeded_client):
+    seeded_client.post(
+        "/auth/register",
+        json={"email": "vlad@example.com", "first_name": "Vlad", "last_name": "Ene", "password": "secret1"},
+    )
+    seeded_client.post("/auth/logout")
+    assert seeded_client.post("/auth/login", json={"username": "VLAD@example.com", "password": "secret1"}).status_code == 200
+
+
 def test_copilot_scripted_proposal(seeded_client):
     d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
     cp = seeded_client.post(
@@ -137,6 +172,18 @@ def test_vigoare_patch_flips_check_eight(seeded_client):
     assert {c["check_id"]: c["state"] for c in seeded_client.get(f"/projects/{slug}/checklist").json()}[8] == "todo"
     d = seeded_client.patch(f"/projects/{slug}", json={"vigoare_days": 30}).json()
     assert {c["check_id"]: c["state"] for c in d["checklist"]}[8] == "ok"
+
+
+def test_semantic_endpoint_wiring(seeded_client):
+    # With AI disabled (forced in conftest), the semantic refresh returns 200 and leaves
+    # the 7 semantic checks as 'todo' (no crash, graceful fallback).
+    r = seeded_client.post("/validator/transparenta-preturilor-medicamentelor-compensate/semantic")
+    assert r.status_code == 200
+    ck = r.json()
+    assert len(ck) == 12
+    semantic = [c for c in ck if c["check_id"] in (1, 4, 5, 6, 7, 9, 10)]
+    # demo seed has cached semantic values; without AI they stay as cached (not crash)
+    assert all(c["state"] in ("ok", "warn", "alert", "todo") for c in semantic)
 
 
 def test_patch_act_type(seeded_client):

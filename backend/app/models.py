@@ -24,6 +24,10 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    # Email is the primary login identifier for self-registered users (no verification yet).
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    first_name: Mapped[str] = mapped_column(String(120), default="")
+    last_name: Mapped[str] = mapped_column(String(120), default="")
     display_name: Mapped[str] = mapped_column(String(160), default="")
     initials: Mapped[str] = mapped_column(String(8), default="")
     # Auth provider seam: "local" today, "google" later (external_id holds the OAuth sub).

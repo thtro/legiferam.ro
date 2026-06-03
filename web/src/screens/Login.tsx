@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Brand } from "../components/chrome";
 import { Btn } from "../components/ui";
 import { api } from "../lib/api";
@@ -8,8 +8,8 @@ import { useApp } from "../lib/app-context";
 export default function LoginScreen() {
   const navigate = useNavigate();
   const { setUser } = useApp();
-  const [username, setUsername] = useState("demo");
-  const [password, setPassword] = useState("demo");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -62,8 +62,8 @@ export default function LoginScreen() {
         <p style={{ fontSize: 13.5, color: "var(--muted)", textAlign: "center", margin: "0 0 20px", lineHeight: 1.5 }}>
           Autentifică-te pentru a edita proiecte. Pentru explorare, folosește <b>Mod DEMO</b> — nu cere cont.
         </p>
-        <label style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)" }}>Utilizator</label>
-        <input value={username} onChange={(e) => setUsername(e.target.value)} style={{ ...inputStyle, margin: "6px 0 14px" }} />
+        <label style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)" }}>Email</label>
+        <input type="email" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="maria.pop@email.ro" style={{ ...inputStyle, margin: "6px 0 14px" }} />
         <label style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)" }}>Parolă</label>
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, margin: "6px 0 6px" }} />
         {error && <div style={{ color: "var(--alert)", fontSize: 13, margin: "8px 0" }}>{error}</div>}
@@ -72,8 +72,14 @@ export default function LoginScreen() {
             {busy ? "Se autentifică…" : "Autentificare"}
           </Btn>
         </div>
-        <p style={{ fontSize: 12, color: "var(--faint)", textAlign: "center", marginTop: 14 }}>
-          MVP: cont <code>demo</code> / <code>demo</code>. Google OAuth urmează.
+        <p style={{ fontSize: 13, color: "var(--muted)", textAlign: "center", marginTop: 16 }}>
+          Nu ai cont?{" "}
+          <Link to="/register" style={{ color: "var(--blue)", fontWeight: 600, textDecoration: "none" }}>
+            Creează unul
+          </Link>
+        </p>
+        <p style={{ fontSize: 12, color: "var(--faint)", textAlign: "center", marginTop: 10 }}>
+          Pentru explorare, folosește <b>Mod DEMO</b> — nu cere cont. Cont demo: <code>demo</code> / <code>demo</code>.
         </p>
       </form>
     </div>

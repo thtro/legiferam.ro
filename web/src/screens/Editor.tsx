@@ -32,6 +32,7 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const [activeOutline, setActiveOutline] = useState("art3");
   const [showChecks, setShowChecks] = useState(false);
   const [newActType, setNewActType] = useState<ActType | null>(null);
+  const [semanticBusy, setSemanticBusy] = useState(false);
 
   const reload = (s: string) =>
     api.getProject(s).then((p) => {
@@ -134,6 +135,15 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const setActTypeProj = async (t: ActType) => {
     if (canEdit) await api.patchProject(ps, { act_type: t }).then(() => reload(ps));
   };
+  const runSemantic = async () => {
+    setSemanticBusy(true);
+    try {
+      const updated = await api.refreshSemantic(ps);
+      setChecklist(updated);
+    } finally {
+      setSemanticBusy(false);
+    }
+  };
 
   return (
     <EditorShell
@@ -178,6 +188,8 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         articles={articles}
         canEdit={canEdit}
         checklist={checklist}
+        onRunSemantic={runSemantic}
+        semanticBusy={semanticBusy}
         actType={project.act_type}
         onSetActType={setActTypeProj}
         title={title}
@@ -407,6 +419,8 @@ function CentreStage({
   articles,
   canEdit,
   checklist,
+  onRunSemantic,
+  semanticBusy,
   actType,
   onSetActType,
   title,
@@ -423,6 +437,8 @@ function CentreStage({
   articles: Article[];
   canEdit: boolean;
   checklist: ChecklistItem[];
+  onRunSemantic: () => void | Promise<void>;
+  semanticBusy: boolean;
   actType: ActType;
   onSetActType: (t: ActType) => void | Promise<void>;
   title: string;
@@ -483,6 +499,19 @@ function CentreStage({
         <StageHeader step={8} label="Verificare finală" title="Aproape gata de depunere" sub="Trecem în revistă toate verificările de conformitate." />
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", padding: 22 }}>
           <ComplianceBar checklist={checklist} expandable={false} />
+          {checklist.some((c) => c.kind !== "determinist" && c.state === "todo") && (
+            <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 12, background: "var(--blue-soft)", border: "1px solid #d7e3f1", borderRadius: "var(--r)", padding: "12px 14px" }}>
+              <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--navy)", color: "var(--amber)", display: "grid", placeItems: "center", flex: "none" }}>
+                <Icon name="spark" size={17} />
+              </span>
+              <div style={{ flex: 1, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.45 }}>
+                Unele verificări (titlu, definiții, sancțiuni, claritate) cer o analiză de sens. Asistentul le poate evalua acum.
+              </div>
+              <Btn variant="primary" size="md" icon="spark" disabled={semanticBusy} onClick={onRunSemantic}>
+                {semanticBusy ? "Se verifică…" : "Verifică cu AI"}
+              </Btn>
+            </div>
+          )}
           <div style={{ height: 1, background: "var(--border)", margin: "16px 0" }} />
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {checklist

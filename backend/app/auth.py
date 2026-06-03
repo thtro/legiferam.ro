@@ -38,13 +38,15 @@ def create_token(user: User) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def authenticate_local(db: Session, username: str, password: str) -> User | None:
-    """Validate credentials against the configured demo account (or any local user)."""
-    user = db.scalar(select(User).where(User.username == username))
-    # The seeded demo user carries a password hash; also accept the env-configured pair.
+def authenticate_local(db: Session, identifier: str, password: str) -> User | None:
+    """Validate credentials. `identifier` may be an email or a username."""
+    ident = identifier.strip().lower()
+    user = db.scalar(select(User).where((User.email == ident) | (User.username == identifier)))
+    # Registered users carry a password hash.
     if user and verify_password(password, user.password_hash):
         return user
-    if username == settings.demo_user and password == settings.demo_pass:
+    # The env-configured demo account works even if not yet seeded.
+    if identifier == settings.demo_user and password == settings.demo_pass:
         if not user:
             user = User(
                 username=settings.demo_user,
@@ -58,6 +60,32 @@ def authenticate_local(db: Session, username: str, password: str) -> User | None
             db.refresh(user)
         return user
     return None
+
+
+def register_user(db: Session, email: str, first_name: str, last_name: str, password: str) -> User:
+    """Create a self-registered local user (no email verification yet).
+
+    Raises ValueError if the email is already taken."""
+    email = email.strip().lower()
+    first_name = first_name.strip()
+    last_name = last_name.strip()
+    if db.scalar(select(User).where(User.email == email)):
+        raise ValueError("Există deja un cont cu acest email.")
+    initials = ((first_name[:1] + last_name[:1]) or email[:2]).upper()
+    user = User(
+        username=email,  # email doubles as the unique username for local accounts
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+        display_name=f"{first_name} {last_name}".strip() or email,
+        initials=initials,
+        provider="local",
+        password_hash=hash_password(password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def get_current_user(

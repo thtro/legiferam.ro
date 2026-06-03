@@ -100,6 +100,9 @@ export interface ProjectSummary {
 export interface User {
   id: number;
   username: string;
+  email: string | null;
+  first_name: string;
+  last_name: string;
   display_name: string;
   initials: string;
   provider: string;

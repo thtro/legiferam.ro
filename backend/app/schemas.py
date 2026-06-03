@@ -1,12 +1,20 @@
 """Pydantic schemas for API I/O."""
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────
 class LoginIn(BaseModel):
+    # Accepts an email or a username (e.g. the demo account).
     username: str
+    password: str
+
+
+class RegisterIn(BaseModel):
+    email: EmailStr
+    first_name: str
+    last_name: str
     password: str
 
 
@@ -14,6 +22,9 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     username: str
+    email: str | None = None
+    first_name: str = ""
+    last_name: str = ""
     display_name: str
     initials: str
     provider: str
