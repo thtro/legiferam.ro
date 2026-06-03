@@ -90,7 +90,9 @@ def test_copilot_scripted_proposal(seeded_client):
 
 def test_amendment_structural_diff(seeded_client):
     d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
-    am = seeded_client.get(f"/amendments/{d['amendments'][0]['id']}").json()
+    # the seeded Art. 3 amendment carries the structural diff ops
+    amend = next(a for a in d["amendments"] if a["article_num"] == 3)
+    am = seeded_client.get(f"/amendments/{amend['id']}").json()
     assert [o["kind"] for o in am["ops"]] == ["unchanged", "mixed", "ins"]
 
 
@@ -195,11 +197,118 @@ def test_patch_act_type(seeded_client):
     assert d["act_type"] == "lege-organica"
 
 
-def test_created_project_appears_in_discovery(seeded_client):
+def test_published_project_appears_in_discovery_draft_does_not(seeded_client):
     seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
-    seeded_client.post("/projects", json={"title": "Lege privind apa potabilă rurală", "act_type": "lege-ordinara"})
-    slugs = {p["slug"] for p in seeded_client.get("/projects").json()}
-    assert "lege-privind-apa-potabila-rurala" in slugs
+    slug = seeded_client.post(
+        "/projects", json={"title": "Lege privind apa potabilă rurală", "act_type": "lege-ordinara"}
+    ).json()["slug"]
+    # draft is private
+    assert slug not in {p["slug"] for p in seeded_client.get("/projects").json()}
+    # published is public
+    seeded_client.post(f"/projects/{slug}/publish")
+    assert slug in {p["slug"] for p in seeded_client.get("/projects").json()}
+
+
+def _new_user(client, email):
+    client.post("/auth/register", json={"email": email, "first_name": "T", "last_name": "U", "password": "parola1"})
+
+
+def test_draft_is_private_until_published(seeded_client):
+    _new_user(seeded_client, "drafter@test.ro")
+    slug = seeded_client.post("/projects", json={"title": "Lege draft privat", "act_type": "lege-ordinara"}).json()["slug"]
+    # not in public discovery while a draft
+    assert all(p["slug"] != slug for p in seeded_client.get("/projects").json())
+    # but in the owner's "Proiectele mele"
+    mine = seeded_client.get("/projects/mine").json()
+    row = next(p for p in mine if p["slug"] == slug)
+    assert row["is_published"] is False and row["status"] == "schita" and row["role"] == "Curator"
+    # publish -> public
+    seeded_client.post(f"/projects/{slug}/publish")
+    assert any(p["slug"] == slug for p in seeded_client.get("/projects").json())
+
+
+def test_coauthor_can_edit_outsider_cannot(seeded_client):
+    _new_user(seeded_client, "owner@test.ro")
+    slug = seeded_client.post("/projects", json={"title": "Lege co-autori", "act_type": "lege-ordinara"}).json()["slug"]
+    art = seeded_client.post(
+        f"/projects/{slug}/articles", json={"title": "Obiect", "single_idea": True, "alineate": ["a"]}
+    ).json()["id"]
+    # register the coauthor first so they can be added by email
+    seeded_client.post("/auth/logout")
+    _new_user(seeded_client, "co@test.ro")
+    seeded_client.post("/auth/logout")
+    # owner adds the coauthor
+    seeded_client.post("/auth/login", json={"username": "owner@test.ro", "password": "parola1"})
+    d = seeded_client.post(f"/projects/{slug}/coauthors", json={"email": "co@test.ro"}).json()
+    assert any(c["role"] == "Co-autor" for c in d["contributors"])
+    # coauthor can edit
+    seeded_client.post("/auth/logout")
+    seeded_client.post("/auth/login", json={"username": "co@test.ro", "password": "parola1"})
+    assert seeded_client.put(
+        f"/projects/{slug}/articles/{art}", json={"title": "Obiect", "single_idea": True, "alineate": ["b"]}
+    ).status_code == 200
+    # outsider cannot
+    seeded_client.post("/auth/logout")
+    _new_user(seeded_client, "outsider@test.ro")
+    assert seeded_client.put(
+        f"/projects/{slug}/articles/{art}", json={"title": "x", "single_idea": True, "alineate": ["c"]}
+    ).status_code == 403
+
+
+def test_amendment_propose_accept_applies_change(seeded_client):
+    _new_user(seeded_client, "author2@test.ro")
+    slug = seeded_client.post("/projects", json={"title": "Lege amendabila", "act_type": "lege-ordinara"}).json()["slug"]
+    art = seeded_client.post(
+        f"/projects/{slug}/articles", json={"title": "Obiect", "single_idea": True, "alineate": ["vechi"]}
+    ).json()["id"]
+    seeded_client.post(f"/projects/{slug}/publish")
+    seeded_client.post("/auth/logout")
+    # a citizen proposes
+    _new_user(seeded_client, "citizen@test.ro")
+    am = seeded_client.post(
+        "/amendments",
+        json={"target_article_id": art, "proposed_title": "Obiect", "proposed_alineate": ["vechi", "nou"], "reason": "adaug ceva"},
+    ).json()
+    assert am["status"] == "pending" and "ins" in [o["kind"] for o in am["ops"]]
+    # citizen cannot decide
+    assert seeded_client.post(f"/amendments/{am['id']}/decision", json={"decision": "accept"}).status_code == 403
+    # curator accepts -> change applied
+    seeded_client.post("/auth/logout")
+    seeded_client.post("/auth/login", json={"username": "author2@test.ro", "password": "parola1"})
+    assert seeded_client.post(f"/amendments/{am['id']}/decision", json={"decision": "accept", "reason": "ok"}).json()["status"] == "accepted"
+    arts = seeded_client.get(f"/projects/{slug}").json()["articles"]
+    assert arts[0]["alineate"] == ["vechi", "nou"]
+
+
+def test_reject_requires_reason_and_records_history(seeded_client):
+    _new_user(seeded_client, "owner3@test.ro")
+    slug = seeded_client.post("/projects", json={"title": "Lege respinsa", "act_type": "lege-ordinara"}).json()["slug"]
+    art = seeded_client.post(
+        f"/projects/{slug}/articles", json={"title": "O", "single_idea": True, "alineate": ["t"]}
+    ).json()["id"]
+    seeded_client.post(f"/projects/{slug}/publish")
+    seeded_client.post("/auth/logout")
+    _new_user(seeded_client, "proposer@test.ro")
+    am = seeded_client.post(
+        "/amendments", json={"target_article_id": art, "proposed_title": "O", "proposed_alineate": ["t2"], "reason": "schimb"}
+    ).json()
+    seeded_client.post("/auth/logout")
+    seeded_client.post("/auth/login", json={"username": "owner3@test.ro", "password": "parola1"})
+    # reject without reason -> 422
+    assert seeded_client.post(f"/amendments/{am['id']}/decision", json={"decision": "reject"}).status_code == 422
+    assert seeded_client.post(f"/amendments/{am['id']}/decision", json={"decision": "reject", "reason": "nu acum"}).json()["status"] == "rejected"
+    kinds = [e["kind"] for e in seeded_client.get(f"/projects/{slug}").json()["events"]]
+    assert "amendment_rejected" in kinds and "published" in kinds and "created" in kinds
+
+
+def test_ignore_check_counts_as_passed(seeded_client):
+    _new_user(seeded_client, "ignorer@test.ro")
+    slug = seeded_client.post("/projects", json={"title": "Lege ignorata", "act_type": "lege-ordinara"}).json()["slug"]
+    before = seeded_client.get(f"/projects/{slug}/checklist").json()
+    base = sum(1 for c in before if c["state"] == "ok" or c["ignored"])
+    after = seeded_client.post(f"/projects/{slug}/checks/10/ignore").json()
+    assert sum(1 for c in after if c["state"] == "ok" or c["ignored"]) == base + 1
+    assert next(c["ignored"] for c in after if c["check_id"] == 10) is True
 
 
 def test_demo_project_is_write_protected(seeded_client):

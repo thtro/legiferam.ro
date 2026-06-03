@@ -52,6 +52,11 @@ class Project(Base):
     # Entry-into-force, in days from publication (min 3 per L24/2000). None = unset.
     vigoare_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # A project stays a draft (schiță) in "Proiectele mele" until published; only then
+    # can others propose amendments.
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # JSON list of check ids the author has chosen to ignore (false positives).
+    ignored_checks: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -75,6 +80,9 @@ class Project(Base):
     )
     versions: Mapped[list[Version]] = relationship(
         "Version", back_populates="project", cascade="all, delete-orphan", order_by="Version.id"
+    )
+    events: Mapped[list[ProjectEvent]] = relationship(
+        "ProjectEvent", cascade="all, delete-orphan", order_by="ProjectEvent.id"
     )
 
 
@@ -173,6 +181,14 @@ class Amendment(Base):
     when_label: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    # Real-amendment fields: the proposed new state of the targeted article.
+    target_article_id: Mapped[int | None] = mapped_column(ForeignKey("articles.id", ondelete="SET NULL"), nullable=True)
+    proposed_title: Mapped[str] = mapped_column(Text, default="")
+    proposed_alineate: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of strings
+    decided_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    decision_reason: Mapped[str] = mapped_column(Text, default="")
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     project: Mapped[Project] = relationship("Project", back_populates="amendments")
     ops: Mapped[list[AmendmentOp]] = relationship(
         "AmendmentOp", back_populates="amendment", cascade="all, delete-orphan", order_by="AmendmentOp.ordine"
@@ -234,6 +250,26 @@ class Comment(Base):
     author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     author_name: Mapped[str] = mapped_column(String(160), default="")
     body: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProjectEvent(Base):
+    """Append-only history log: every modification to a project, with diff-style detail."""
+
+    __tablename__ = "project_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    actor_name: Mapped[str] = mapped_column(String(160), default="")
+    actor_initials: Mapped[str] = mapped_column(String(8), default="")
+    # created | edited_article | added_article | deleted_article | published |
+    # set_vigoare | edited_motives | added_coauthor |
+    # amendment_proposed | amendment_accepted | amendment_rejected
+    kind: Mapped[str] = mapped_column(String(40))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    # Optional diff payload (JSON: {before: [...], after: [...]}) for diff-style rendering.
+    diff: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

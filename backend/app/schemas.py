@@ -107,6 +107,7 @@ class ChecklistItemOut(BaseModel):
     label: str
     detail: str
     kind: str  # determinist | semantic
+    ignored: bool = False
 
 
 class ProjectSummary(BaseModel):
@@ -137,6 +138,9 @@ class AmendmentOut(BaseModel):
     id: int
     article_num: int
     article_title: str
+    target_article_id: int | None = None
+    proposed_title: str = ""
+    proposed_alineate: list[str] = []
     author_name: str
     author_initials: str
     author_color: str
@@ -144,7 +148,33 @@ class AmendmentOut(BaseModel):
     reason: str
     status: str
     when_label: str
+    decision_reason: str = ""
     ops: list[AmendmentOpOut] = []
+
+
+class AmendmentCreate(BaseModel):
+    target_article_id: int
+    proposed_title: str
+    proposed_alineate: list[str]
+    reason: str
+
+
+class AmendmentDecision(BaseModel):
+    decision: str  # accept | reject
+    reason: str = ""
+
+
+class CoauthorIn(BaseModel):
+    email: EmailStr
+
+
+class ProjectEventOut(BaseModel):
+    kind: str
+    summary: str
+    actor_name: str
+    actor_initials: str
+    diff: dict | None = None
+    when: str
 
 
 class ProjectDetail(BaseModel):
@@ -160,6 +190,9 @@ class ProjectDetail(BaseModel):
     watchers: int
     updated_label: str
     is_demo: bool
+    is_published: bool
+    viewer_can_edit: bool
+    viewer_is_curator: bool
     vigoare_days: int | None
     passed: int
     total: int
@@ -169,6 +202,20 @@ class ProjectDetail(BaseModel):
     similar_laws: list[SimilarLawOut]
     checklist: list[ChecklistItemOut]
     amendments: list[AmendmentOut]
+    events: list[ProjectEventOut] = []
+
+
+class MyProjectOut(BaseModel):
+    id: int
+    slug: str
+    title: str
+    act_type: str
+    status: str
+    is_published: bool
+    role: str
+    passed: int
+    total: int
+    updated_label: str
 
 
 # ── AI co-pilot ───────────────────────────────────────────────────────────

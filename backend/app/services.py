@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.collab import ignored_set
 from app.models import ChecklistResult, Project, Version
 from app.validator.catalog import CHECKS, DETERMINISTIC_IDS
 from app.validator.deterministic import ProjectView, run_deterministic
@@ -90,19 +91,28 @@ def compute_checklist(db: Session, project: Project) -> list[dict]:
     Summary/discovery projects (no articles) have no live structure to evaluate, so
     their seeded snapshot version is returned verbatim — that's their score on the grid.
     """
+    ignored = ignored_set(project)
+
+    def _annotate(items: list[dict]) -> list[dict]:
+        for it in items:
+            it["ignored"] = it["check_id"] in ignored
+        return items
+
     if not project.articles:
         version = latest_version(db, project)
         if version and version.checklist_results:
-            return [
-                {
-                    "check_id": r.check_id,
-                    "state": r.state,
-                    "label": r.label,
-                    "detail": r.detail,
-                    "kind": r.kind,
-                }
-                for r in sorted(version.checklist_results, key=lambda x: x.check_id)
-            ]
+            return _annotate(
+                [
+                    {
+                        "check_id": r.check_id,
+                        "state": r.state,
+                        "label": r.label,
+                        "detail": r.detail,
+                        "kind": r.kind,
+                    }
+                    for r in sorted(version.checklist_results, key=lambda x: x.check_id)
+                ]
+            )
 
     view = project_view(project)
     det = {r["check_id"]: r for r in run_deterministic(view)}
@@ -124,9 +134,10 @@ def compute_checklist(db: Session, project: Project) -> list[dict]:
                     "kind": meta.kind,
                 }
             )
-    return items
+    return _annotate(items)
 
 
 def compliance_score(checklist: list[dict]) -> tuple[int, int]:
-    passed = sum(1 for c in checklist if c["state"] == "ok")
+    # An ignored check (author asserts the form is fine) counts as passed.
+    passed = sum(1 for c in checklist if c["state"] == "ok" or c.get("ignored"))
     return passed, len(checklist)
