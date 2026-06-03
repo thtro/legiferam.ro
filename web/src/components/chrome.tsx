@@ -74,6 +74,7 @@ export function Brand({ onClick }: { onClick?: () => void }) {
 export function TopNav({ active }: { active?: "landing" | "project" }) {
   const navigate = useNavigate();
   const { user, demoMode, setDemoMode } = useApp();
+  const [search, setSearch] = useState("");
   const links = [
     { id: "landing", label: "Explorează", to: "/" },
     { id: "project", label: "Proiectele mele", to: "/proiectele-mele" },
@@ -114,7 +115,11 @@ export function TopNav({ active }: { active?: "landing" | "project" }) {
         ))}
       </nav>
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-        <div
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            navigate(search.trim() ? `/?q=${encodeURIComponent(search.trim())}` : "/");
+          }}
           style={{
             display: "flex",
             alignItems: "center",
@@ -124,13 +129,17 @@ export function TopNav({ active }: { active?: "landing" | "project" }) {
             borderRadius: 99,
             padding: "7px 14px",
             width: 230,
-            color: "var(--faint)",
             flex: "none",
           }}
         >
-          <Icon name="search" size={16} />
-          <span style={{ fontSize: 13, whiteSpace: "nowrap" }}>Caută proiecte de lege…</span>
-        </div>
+          <Icon name="search" size={16} style={{ color: "var(--faint)" }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Caută proiecte de lege…"
+            style={{ border: "none", outline: "none", background: "transparent", fontSize: 13, color: "var(--ink)", width: "100%", fontFamily: "var(--sans)" }}
+          />
+        </form>
         {/* "Mod DEMO" sits next to "Începe un proiect" (brief §5). */}
         <Btn
           variant={demoMode ? "accent" : "soft"}

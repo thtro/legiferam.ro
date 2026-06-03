@@ -329,6 +329,25 @@ def test_reject_requires_reason_and_records_history(seeded_client):
     assert "amendment_rejected" in kinds and "published" in kinds and "created" in kinds
 
 
+def test_support_and_watch_toggle(seeded_client):
+    _new_user(seeded_client, "supporter@test.ro")
+    d0 = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
+    base = d0["supporters"]
+    d1 = seeded_client.post(f"/projects/{MAIN_SLUG}/support").json()
+    assert d1["supporters"] == base + 1 and d1["viewer_supports"] is True
+    d2 = seeded_client.post(f"/projects/{MAIN_SLUG}/support").json()
+    assert d2["supporters"] == base and d2["viewer_supports"] is False
+    w1 = seeded_client.post(f"/projects/{MAIN_SLUG}/watch").json()
+    assert w1["viewer_watches"] is True
+    w2 = seeded_client.post(f"/projects/{MAIN_SLUG}/watch").json()
+    assert w2["viewer_watches"] is False
+
+
+def test_support_requires_auth(seeded_client):
+    seeded_client.post("/auth/logout")
+    assert seeded_client.post(f"/projects/{MAIN_SLUG}/support").status_code == 401
+
+
 def test_ignore_check_counts_as_passed(seeded_client):
     _new_user(seeded_client, "ignorer@test.ro")
     slug = seeded_client.post("/projects", json={"title": "Lege ignorata", "act_type": "lege-ordinara"}).json()["slug"]

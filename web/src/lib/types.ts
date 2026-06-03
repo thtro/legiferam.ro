@@ -106,6 +106,8 @@ export interface ProjectDetail {
   is_published: boolean;
   viewer_can_edit: boolean;
   viewer_is_curator: boolean;
+  viewer_supports: boolean;
+  viewer_watches: boolean;
   vigoare_days: number | null;
   passed: number;
   total: number;

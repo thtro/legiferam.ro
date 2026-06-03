@@ -122,16 +122,29 @@ export default function ProjectScreen() {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, width: "100%" }}>
-                  <Btn variant="accent" size="md" icon="heart" style={{ flex: 1, justifyContent: "center" }}>
-                    Susține
+                  <Btn
+                    variant={project.viewer_supports ? "ok" : "accent"}
+                    size="md"
+                    icon={project.viewer_supports ? "check" : "heart"}
+                    style={{ flex: 1, justifyContent: "center" }}
+                    onClick={() => (user ? api.toggleSupport(project.slug).then(setProject) : navigate("/login"))}
+                  >
+                    {project.viewer_supports ? "Susții" : "Susține"}
                   </Btn>
-                  <Btn variant="outline" size="md" icon="bell">
-                    Urmărește
+                  <Btn
+                    variant={project.viewer_watches ? "soft" : "outline"}
+                    size="md"
+                    icon="bell"
+                    onClick={() => (user ? api.toggleWatch(project.slug).then(setProject) : navigate("/login"))}
+                  >
+                    {project.viewer_watches ? "Urmărești" : "Urmărește"}
                   </Btn>
                 </div>
-                <Btn variant="primary" size="md" icon="draft" iconR="arrow" onClick={() => navigate(`/editor/${project.slug}`)} style={{ width: "100%", justifyContent: "center" }}>
-                  Continuă editarea
-                </Btn>
+                {project.viewer_can_edit && (
+                  <Btn variant="primary" size="md" icon="draft" iconR="arrow" onClick={() => navigate(`/editor/${project.slug}`)} style={{ width: "100%", justifyContent: "center" }}>
+                    Continuă editarea
+                  </Btn>
+                )}
               </div>
             </div>
             <div style={{ display: "flex", gap: 4, marginTop: 22 }}>
@@ -460,13 +473,13 @@ function DiscussEmpty() {
       <span style={{ width: 52, height: 52, borderRadius: 14, background: "var(--paper-2)", color: "var(--muted)", display: "inline-grid", placeItems: "center", marginBottom: 14 }}>
         <Icon name="book" size={24} />
       </span>
-      <div style={{ fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Încă nu există discuții</div>
-      <p style={{ fontSize: 14, color: "var(--muted)", maxWidth: 380, margin: "8px auto 18px", lineHeight: 1.55 }}>
-        Pune o întrebare despre un articol sau deschide o temă de dezbatere. Discuțiile sunt publice și ajută la
-        îmbunătățirea textului.
+      <div style={{ fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Discuțiile sosesc în curând</div>
+      <p style={{ fontSize: 14, color: "var(--muted)", maxWidth: 400, margin: "8px auto 18px", lineHeight: 1.55 }}>
+        Vei putea pune întrebări despre un articol sau deschide teme de dezbatere. Până atunci, propune direct o
+        modificare din fila <b>Text</b>.
       </p>
-      <Btn variant="primary" size="md" icon="plus">
-        Deschide o discuție
+      <Btn variant="outline" size="md" icon="branch" disabled>
+        Deschide o discuție (în curând)
       </Btn>
     </div>
   );

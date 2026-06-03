@@ -92,6 +92,10 @@ export const api = {
     req<ProjectDetail>(`/projects/${slugOrId}/publish`, { method: "POST" }),
   addCoauthor: (slugOrId: string | number, email: string) =>
     req<ProjectDetail>(`/projects/${slugOrId}/coauthors`, { method: "POST", body: JSON.stringify({ email }) }),
+  toggleSupport: (slugOrId: string | number) =>
+    req<ProjectDetail>(`/projects/${slugOrId}/support`, { method: "POST" }),
+  toggleWatch: (slugOrId: string | number) =>
+    req<ProjectDetail>(`/projects/${slugOrId}/watch`, { method: "POST" }),
   ignoreCheck: (slugOrId: string | number, checkId: number) =>
     req<ChecklistItem[]>(`/projects/${slugOrId}/checks/${checkId}/ignore`, { method: "POST" }),
   unignoreCheck: (slugOrId: string | number, checkId: number) =>

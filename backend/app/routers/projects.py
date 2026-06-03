@@ -14,7 +14,18 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user, get_optional_user
 from app.collab import diff_ops, ignored_set, is_initiator, log_event, set_ignored
 from app.database import get_db
-from app.models import Amendment, Article, Contributor, MotiveStatement, Paragraph, Project, ProjectEvent, User
+from app.models import (
+    Amendment,
+    Article,
+    Contributor,
+    MotiveStatement,
+    Paragraph,
+    Project,
+    ProjectEvent,
+    Support,
+    User,
+    Watch,
+)
 from app.schemas import (
     ArticleIn,
     ArticleOut,
@@ -102,6 +113,12 @@ def serialize_detail(db: Session, p: Project, viewer: User | None = None) -> dic
     checklist = compute_checklist(db, p)
     passed, total = compliance_score(checklist)
     events = sorted(p.events, key=lambda e: e.id, reverse=True)
+    viewer_supports = bool(
+        viewer and db.scalar(select(Support).where(Support.project_id == p.id, Support.user_id == viewer.id))
+    )
+    viewer_watches = bool(
+        viewer and db.scalar(select(Watch).where(Watch.project_id == p.id, Watch.user_id == viewer.id))
+    )
     return {
         "id": p.id,
         "slug": p.slug,
@@ -118,6 +135,8 @@ def serialize_detail(db: Session, p: Project, viewer: User | None = None) -> dic
         "is_published": p.published_at is not None,
         "viewer_can_edit": is_initiator(db, p, viewer),
         "viewer_is_curator": bool(viewer and p.curator_id == viewer.id),
+        "viewer_supports": viewer_supports,
+        "viewer_watches": viewer_watches,
         "vigoare_days": p.vigoare_days,
         "passed": passed,
         "total": total,
@@ -444,6 +463,38 @@ def replace_motives(
     for i, (section, body) in enumerate(bodies.items()):
         db.add(MotiveStatement(project_id=project.id, section=section, body=body, ordine=i))
     log_event(db, project, user, "edited_motives", "a actualizat expunerea de motive")
+    db.commit()
+    db.refresh(project)
+    return serialize_detail(db, project, user)
+
+
+@router.post("/{slug_or_id}/support", response_model=ProjectDetail)
+def toggle_support(slug_or_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Toggle the current user's support for a project (updates the supporters count)."""
+    project = _get_project(db, slug_or_id)
+    existing = db.scalar(select(Support).where(Support.project_id == project.id, Support.user_id == user.id))
+    if existing:
+        db.delete(existing)
+        project.supporters = max(0, project.supporters - 1)
+    else:
+        db.add(Support(project_id=project.id, user_id=user.id))
+        project.supporters += 1
+    db.commit()
+    db.refresh(project)
+    return serialize_detail(db, project, user)
+
+
+@router.post("/{slug_or_id}/watch", response_model=ProjectDetail)
+def toggle_watch(slug_or_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Toggle the current user's watch on a project (updates the watchers count)."""
+    project = _get_project(db, slug_or_id)
+    existing = db.scalar(select(Watch).where(Watch.project_id == project.id, Watch.user_id == user.id))
+    if existing:
+        db.delete(existing)
+        project.watchers = max(0, project.watchers - 1)
+    else:
+        db.add(Watch(project_id=project.id, user_id=user.id))
+        project.watchers += 1
     db.commit()
     db.refresh(project)
     return serialize_detail(db, project, user)

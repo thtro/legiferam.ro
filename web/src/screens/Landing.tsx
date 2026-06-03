@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { DemoBanner, TopNav } from "../components/chrome";
 import { Btn, Icon, StatusBadge } from "../components/ui";
 import { api } from "../lib/api";
@@ -8,14 +8,21 @@ import type { ProjectSummary } from "../lib/types";
 
 export default function LandingScreen() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const query = (params.get("q") ?? "").trim().toLowerCase();
   const [domain, setDomain] = useState("Toate domeniile");
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [sort, setSort] = useState<"supporters" | "score">("supporters");
 
   useEffect(() => {
     api.listProjects().then(setProjects).catch(() => setProjects([]));
   }, []);
 
-  const list = domain === "Toate domeniile" ? projects : projects.filter((d) => d.domain === domain);
+  const list = projects
+    .filter((d) => domain === "Toate domeniile" || d.domain === domain)
+    .filter((d) => !query || d.title.toLowerCase().includes(query))
+    .slice()
+    .sort((a, b) => (sort === "supporters" ? b.supporters - a.supporters : b.passed / b.total - a.passed / a.total));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -157,12 +164,16 @@ export default function LandingScreen() {
         <section id="lf-discover" style={{ maxWidth: 1080, margin: "0 auto", padding: "36px 32px 64px" }}>
           <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
             <div>
-              <h2 style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", margin: 0, letterSpacing: "-.01em" }}>Proiecte active</h2>
+              <h2 style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", margin: 0, letterSpacing: "-.01em" }}>
+                {query ? `Rezultate pentru „${query}”` : "Proiecte active"}
+              </h2>
               <p style={{ fontSize: 14, color: "var(--muted)", margin: "6px 0 0" }}>
-                Susține o inițiativă sau propune o modificare. Totul e public.
+                {query ? `${list.length} proiect(e) găsite.` : "Susține o inițiativă sau propune o modificare. Totul e public."}
               </p>
             </div>
             <button
+              onClick={() => setSort((s) => (s === "supporters" ? "score" : "supporters"))}
+              title="Schimbă sortarea"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -178,7 +189,7 @@ export default function LandingScreen() {
                 boxShadow: "var(--sh-1)",
               }}
             >
-              <Icon name="filter" size={15} /> Cele mai susținute
+              <Icon name="filter" size={15} /> {sort === "supporters" ? "Cele mai susținute" : "Cea mai mare conformitate"}
             </button>
           </div>
 

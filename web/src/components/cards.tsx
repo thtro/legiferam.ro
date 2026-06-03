@@ -197,9 +197,6 @@ export function AIProposalCard({
         <Btn variant={inserted ? "ok" : "primary"} size="sm" icon={inserted ? "check" : "plus"} onClick={onInsert}>
           {inserted ? "Inserat în proiect" : "Inserează în proiect"}
         </Btn>
-        <Btn variant="outline" size="sm" icon="draft">
-          Modifică
-        </Btn>
         <Btn variant="ghost" size="sm" icon="x" onClick={onReject}>
           Respinge
         </Btn>

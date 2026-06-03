@@ -193,6 +193,8 @@ class ProjectDetail(BaseModel):
     is_published: bool
     viewer_can_edit: bool
     viewer_is_curator: bool
+    viewer_supports: bool = False
+    viewer_watches: bool = False
     vigoare_days: int | None
     passed: int
     total: int

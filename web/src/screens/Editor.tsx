@@ -187,6 +187,29 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const setActTypeProj = async (t: ActType) => {
     if (canEdit) await api.patchProject(ps, { act_type: t }).then(() => reload(ps));
   };
+  const markCandidate = async () => {
+    if (canEdit) await api.patchProject(ps, { status: "candidat" }).then(() => reload(ps));
+  };
+  const exportLaw = () => {
+    if (!project) return;
+    const lines: string[] = [`# ${project.title}`, ""];
+    for (const a of project.articles) {
+      lines.push(`## Art. ${a.num}. — ${a.title}`);
+      a.alineate.forEach((al, i) => lines.push(`${a.alineate.length > 1 ? `(${i + 1}) ` : ""}${al}`));
+      lines.push("");
+    }
+    if (project.motives.length) {
+      lines.push("## Expunere de motive", "");
+      for (const m of project.motives) lines.push(`### ${m.section}`, m.body, "");
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${project.slug}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
   const runSemantic = async () => {
     setSemanticBusy(true);
     try {
@@ -222,6 +245,7 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
       setShowChecks={setShowChecks}
       onHome={() => navigate(`/proiect/${ps}`)}
       onPreview={() => navigate(`/proiect/${ps}`)}
+      onExport={exportLaw}
       isDraft={!project.is_published && !project.is_demo}
       canEdit={canEdit}
       readOnlyNote={
@@ -280,6 +304,9 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         onSaveArticle={saveArticle}
         onAddArticle={addArticle}
         onDeleteArticle={deleteArticle}
+        onMarkCandidate={markCandidate}
+        onPreview={() => navigate(`/proiect/${ps}`)}
+        status={project.status}
       />
     </EditorShell>
   );
@@ -362,6 +389,7 @@ function EditorShell({
   setShowChecks,
   onHome,
   onPreview,
+  onExport,
   rail,
   copilot,
   children,
@@ -385,6 +413,7 @@ function EditorShell({
   setShowChecks: (v: boolean) => void;
   onHome: () => void;
   onPreview?: () => void;
+  onExport?: () => void;
   rail?: React.ReactNode;
   copilot: React.ReactNode;
   children: React.ReactNode;
@@ -473,7 +502,7 @@ function EditorShell({
               Publică
             </Btn>
           ) : (
-            <Btn variant="primary" size="sm" icon="export">
+            <Btn variant="primary" size="sm" icon="export" onClick={onExport}>
               Export
             </Btn>
           )}
@@ -606,6 +635,9 @@ function CentreStage({
   onSaveArticle,
   onAddArticle,
   onDeleteArticle,
+  onMarkCandidate,
+  onPreview,
+  status,
 }: {
   step: number;
   projectId: number;
@@ -626,6 +658,9 @@ function CentreStage({
   onSaveArticle: (a: Article) => void | Promise<void>;
   onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
   onDeleteArticle: (id: number) => void | Promise<void>;
+  onMarkCandidate: () => void | Promise<void>;
+  onPreview: () => void;
+  status: string;
 }) {
   if (step === 1) return <TipActStep actType={actType} canEdit={canEdit} onSet={onSetActType} />;
   if (step === 2)
@@ -680,10 +715,12 @@ function CentreStage({
               ))}
           </div>
           <div style={{ marginTop: 16, display: "flex", gap: 9 }}>
-            <Btn variant="accent" size="md" icon="flag">
-              Marchează drept candidat de depunere
-            </Btn>
-            <Btn variant="outline" size="md" icon="eye">
+            {canEdit && (
+              <Btn variant={status === "candidat" ? "ok" : "accent"} size="md" icon={status === "candidat" ? "check" : "flag"} onClick={onMarkCandidate}>
+                {status === "candidat" ? "Marcat drept candidat" : "Marchează drept candidat de depunere"}
+              </Btn>
+            )}
+            <Btn variant="outline" size="md" icon="eye" onClick={onPreview}>
               Previzualizează legea
             </Btn>
           </div>
