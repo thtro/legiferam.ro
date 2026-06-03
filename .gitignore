@@ -1,0 +1,33 @@
+# Secrets — NEVER commit
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+*.local
+
+# Build / runtime artifacts
+*.log
+.DS_Store
+postgres-data/
+
+# Editor
+.idea/
+.vscode/
+
+# Extracted design source (reference only, not part of the app)
+_design_src/
+legifor.ro.zip
