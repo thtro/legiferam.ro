@@ -29,6 +29,7 @@ from app.models import (
 from app.schemas import (
     ArticleIn,
     ArticleOut,
+    ArticlesBulkIn,
     ChecklistItemOut,
     CoauthorIn,
     MotivesReplace,
@@ -427,6 +428,39 @@ def add_article(
     db.commit()
     db.refresh(article)
     return _article_out(article)
+
+
+@router.post("/{slug_or_id}/articles/bulk", response_model=ProjectDetail, status_code=201)
+def add_articles_bulk(
+    slug_or_id: str, payload: ArticlesBulkIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Append several articles at once (used by the AI research-and-draft feature)."""
+    project = _get_project(db, slug_or_id)
+    _require_editor(db, project, user)
+    next_ordine = max((a.ordine for a in project.articles), default=0)
+    added = 0
+    for art in payload.articles:
+        if not art.alineate:
+            continue
+        next_ordine += 1
+        db.add(
+            Article(
+                project_id=project.id,
+                num=next_ordine,
+                title=art.title,
+                single_idea=art.single_idea,
+                ordine=next_ordine,
+                paragraphs=[Paragraph(num=i, ordine=i, text=t) for i, t in enumerate(art.alineate, start=1)],
+            )
+        )
+        added += 1
+    db.flush()
+    _renumber_articles(project)
+    if added:
+        log_event(db, project, user, "added_article", f"a adăugat {added} articole dintr-un draft AI")
+    db.commit()
+    db.refresh(project)
+    return serialize_detail(db, project, user)
 
 
 @router.delete("/{slug_or_id}/articles/{article_id}", status_code=204)

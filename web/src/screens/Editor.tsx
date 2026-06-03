@@ -172,6 +172,11 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
     await api.addArticle(ps, a);
     await reload(ps);
   };
+  const addArticlesBulk = async (arts: { title: string; single_idea: boolean; alineate: string[] }[]) => {
+    if (!canEdit || !arts.length) return;
+    await api.addArticlesBulk(ps, arts);
+    await reload(ps);
+  };
   const deleteArticle = async (id: number) => {
     if (canEdit && id > 0) {
       await api.deleteArticle(ps, id);
@@ -303,6 +308,7 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         onSaveMotives={saveMotives}
         onSaveArticle={saveArticle}
         onAddArticle={addArticle}
+        onAddArticlesBulk={addArticlesBulk}
         onDeleteArticle={deleteArticle}
         onMarkCandidate={markCandidate}
         onPreview={() => navigate(`/proiect/${ps}`)}
@@ -634,6 +640,7 @@ function CentreStage({
   onSaveMotives,
   onSaveArticle,
   onAddArticle,
+  onAddArticlesBulk,
   onDeleteArticle,
   onMarkCandidate,
   onPreview,
@@ -657,6 +664,7 @@ function CentreStage({
   onSaveMotives: (sections: { section: string; body: string }[]) => void | Promise<void>;
   onSaveArticle: (a: Article) => void | Promise<void>;
   onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
+  onAddArticlesBulk: (arts: { title: string; single_idea: boolean; alineate: string[] }[]) => void | Promise<void>;
   onDeleteArticle: (id: number) => void | Promise<void>;
   onMarkCandidate: () => void | Promise<void>;
   onPreview: () => void;
@@ -666,12 +674,14 @@ function CentreStage({
   if (step === 2)
     return (
       <LawTextStep
+        projectId={projectId}
         title={title}
         onSaveTitle={onSaveTitle}
         articles={articles}
         canEdit={canEdit}
         onSaveArticle={onSaveArticle}
         onAddArticle={onAddArticle}
+        onAddArticlesBulk={onAddArticlesBulk}
         onDeleteArticle={onDeleteArticle}
         onRunSemantic={onRunSemantic}
         semanticBusy={semanticBusy}
@@ -782,22 +792,26 @@ function TipActStep({ actType, canEdit, onSet }: { actType: ActType; canEdit: bo
 
 // ── Step 2: Textul legii (titlu + definiții + articole + sancțiuni) ─────────
 function LawTextStep({
+  projectId,
   title,
   onSaveTitle,
   articles,
   canEdit,
   onSaveArticle,
   onAddArticle,
+  onAddArticlesBulk,
   onDeleteArticle,
   onRunSemantic,
   semanticBusy,
 }: {
+  projectId: number;
   title: string;
   onSaveTitle: (v: string) => void;
   articles: Article[];
   canEdit: boolean;
   onSaveArticle: (a: Article) => void | Promise<void>;
   onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
+  onAddArticlesBulk: (arts: { title: string; single_idea: boolean; alineate: string[] }[]) => void | Promise<void>;
   onDeleteArticle: (id: number) => void | Promise<void>;
   onRunSemantic: () => void | Promise<void>;
   semanticBusy: boolean;
@@ -807,6 +821,41 @@ function LawTextStep({
   const stripped = val.replace(/^Lege privind\s*/i, "");
   const hasDefs = articles.some((a) => /defini/i.test(a.title));
   const hasSanctions = articles.some((a) => /sanc[țt]i|amend|contraven/i.test(a.title));
+
+  // AI research → first draft of articles. Proposal persists per project until used.
+  const researchKey = `legiferam_research_${projectId}`;
+  const [idea, setIdea] = useState("");
+  const [researching, setResearching] = useState(false);
+  const [research, setResearch] = useState<{ research: string; articles: { title: string; single_idea: boolean; alineate: string[] }[] } | null>(
+    () => {
+      try {
+        return JSON.parse(localStorage.getItem(researchKey) || "null");
+      } catch {
+        return null;
+      }
+    },
+  );
+  const saveResearch = (r: typeof research) => {
+    setResearch(r);
+    if (r) localStorage.setItem(researchKey, JSON.stringify(r));
+    else localStorage.removeItem(researchKey);
+  };
+  const runResearch = async () => {
+    if (!idea.trim()) return;
+    setResearching(true);
+    try {
+      const res = await api.researchDraft(projectId, idea.trim());
+      saveResearch({ research: res.research, articles: res.articles });
+    } finally {
+      setResearching(false);
+    }
+  };
+  const acceptDraftArticles = async () => {
+    if (!research) return;
+    await onAddArticlesBulk(research.articles);
+    saveResearch(null);
+    setIdea("");
+  };
 
   const addBtn = (label: string, onClick: () => void, dashed = false) => (
     <button
@@ -856,6 +905,71 @@ function LawTextStep({
           style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: "var(--serif)", fontSize: 18, color: "var(--navy-deep)", padding: "12px 8px", fontWeight: 600 }}
         />
       </div>
+
+      {/* Idee → cercetare AI + draft de articole */}
+      {canEdit && (
+        <div style={{ marginTop: 18, background: "var(--blue-soft)", border: "1px solid #d7e3f1", borderRadius: "var(--r-lg)", padding: "16px 18px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: "var(--navy)", color: "var(--amber)", display: "grid", placeItems: "center", flex: "none" }}>
+              <Icon name="spark" size={16} />
+            </span>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--navy)" }}>Pornește de la o idee</span>
+          </div>
+          <p style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, margin: "0 0 10px" }}>
+            Descrie în cuvintele tale ce vrei să schimbe legea. Asistentul face o cercetare scurtă (inclusiv căutare web) și îți
+            propune un prim draft cu articole structurate: obiect, definiții, articole de fond și sancțiuni.
+          </p>
+          <textarea
+            value={idea}
+            onChange={(e) => setIdea(e.target.value)}
+            rows={3}
+            placeholder="Ex.: vreau ca asociațiile de proprietari să poată monta panouri solare pe acoperișul blocului, cu acordul adunării generale și respectând normele de siguranță…"
+            style={{ width: "100%", border: "1.5px solid var(--border-2)", borderRadius: "var(--r)", padding: "11px 13px", fontFamily: "var(--sans)", fontSize: 13.5, lineHeight: 1.55, color: "var(--ink)", resize: "vertical", outline: "none", background: "var(--surface)" }}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+            <Btn variant="primary" size="md" icon="search" disabled={researching || !idea.trim()} onClick={runResearch}>
+              {researching ? "Cercetează…" : "Cercetează și generează articole"}
+            </Btn>
+            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>Durează ~15–30 secunde.</span>
+          </div>
+
+          {research && (
+            <div style={{ marginTop: 14, background: "var(--surface)", border: "1px solid var(--border)", borderLeft: "3px solid var(--amber)", borderRadius: "var(--r)", padding: "13px 15px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+                <Icon name="book" size={15} style={{ color: "var(--amber)" }} />
+                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--navy)" }}>Cercetare AI</span>
+              </div>
+              {research.research && <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55, margin: "0 0 12px" }}>{research.research}</p>}
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>
+                Draft propus — {research.articles.length} articole
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                {research.articles.map((a, i) => (
+                  <div key={i} style={{ background: "var(--surface-2)", border: "1px dashed var(--border-2)", borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ fontFamily: "var(--serif)", fontWeight: 700, fontSize: 14, color: "var(--navy-deep)", marginBottom: 4 }}>
+                      Art. {i + 1}. — {a.title}
+                    </div>
+                    {a.alineate.map((al, j) => (
+                      <p key={j} style={{ fontFamily: "var(--serif)", fontSize: 13, lineHeight: 1.55, color: "var(--ink)", margin: "2px 0 0" }}>
+                        {a.alineate.length > 1 && <span style={{ color: "var(--muted)" }}>({j + 1}) </span>}
+                        {al}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn variant="primary" size="sm" icon="check" onClick={acceptDraftArticles}>
+                  Inserează toate articolele
+                </Btn>
+                <Btn variant="ghost" size="sm" icon="x" onClick={() => saveResearch(null)}>
+                  Renunță
+                </Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Articolele */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "24px 0 12px" }}>

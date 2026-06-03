@@ -78,6 +78,31 @@ def test_login_by_email_after_register(seeded_client):
     assert seeded_client.post("/auth/login", json={"username": "VLAD@example.com", "password": "secret1"}).status_code == 200
 
 
+def test_research_draft_returns_articles(seeded_client):
+    d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
+    res = seeded_client.post("/ai/research-draft", json={"project_id": d["id"], "idea": "vreau X"}).json()
+    # scripted in tests (no key): returns a research note + a structured draft
+    assert res["scripted"] is True
+    assert res["research"]
+    titles = [a["title"] for a in res["articles"]]
+    assert any("Obiect" in t for t in titles) and any("Sancțiuni" in t for t in titles)
+
+
+def test_articles_bulk_insert(seeded_client):
+    _new_user(seeded_client, "bulk@test.ro")
+    slug = seeded_client.post("/projects", json={"title": "Lege bulk", "act_type": "lege-ordinara"}).json()["slug"]
+    body = {
+        "articles": [
+            {"title": "Obiectul legii", "single_idea": True, "alineate": ["a"]},
+            {"title": "Definiții", "single_idea": True, "alineate": ["b", "c"]},
+            {"title": "Sancțiuni", "single_idea": True, "alineate": ["d"]},
+        ]
+    }
+    d = seeded_client.post(f"/projects/{slug}/articles/bulk", json=body).json()
+    assert [a["num"] for a in d["articles"]] == [1, 2, 3]
+    assert [a["title"] for a in d["articles"]] == ["Obiectul legii", "Definiții", "Sancțiuni"]
+
+
 def test_motives_draft_returns_art31_sections(seeded_client):
     d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
     res = seeded_client.post("/ai/motives-draft", json={"project_id": d["id"]}).json()

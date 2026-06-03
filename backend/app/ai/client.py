@@ -31,8 +31,13 @@ async def chat(
     temperature: float = 0.3,
     max_tokens: int = 1200,
     json_mode: bool = False,
+    web_search: bool = False,
+    timeout: float = 45.0,
 ) -> str:
     """Call OpenRouter chat completions and return the assistant text.
+
+    `web_search=True` enables OpenRouter's web plugin (the model can search the web
+    for fresh context — used by the research-and-draft feature).
 
     Raises AIError on any failure (no key, timeout, rate-limit, bad status) so the
     caller can fall back to a friendly UI message or scripted reply.
@@ -55,9 +60,12 @@ async def chat(
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
+    if web_search:
+        # OpenRouter web plugin: lets the model search the web (a few results).
+        payload["plugins"] = [{"id": "web", "max_results": 3}]
 
     try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
                 f"{settings.openrouter_base_url}/chat/completions",
                 headers=headers,

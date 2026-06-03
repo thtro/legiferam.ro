@@ -250,3 +250,24 @@ class MotivesDraftIn(BaseModel):
 class MotivesDraftOut(BaseModel):
     sections: dict[str, str]
     scripted: bool = False
+
+
+class ResearchDraftIn(BaseModel):
+    project_id: int
+    idea: str
+
+
+class DraftArticle(BaseModel):
+    title: str = ""
+    single_idea: bool = True
+    alineate: list[str] = []
+
+
+class ResearchDraftOut(BaseModel):
+    research: str = ""
+    articles: list[DraftArticle] = []
+    scripted: bool = False
+
+
+class ArticlesBulkIn(BaseModel):
+    articles: list[ArticleIn]

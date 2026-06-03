@@ -67,6 +67,10 @@ export const api = {
     slugOrId: string | number,
     body: { title: string; single_idea: boolean; alineate: string[] },
   ) => req<Article>(`/projects/${slugOrId}/articles`, { method: "POST", body: JSON.stringify(body) }),
+  addArticlesBulk: (
+    slugOrId: string | number,
+    articles: { title: string; single_idea: boolean; alineate: string[] }[],
+  ) => req<ProjectDetail>(`/projects/${slugOrId}/articles/bulk`, { method: "POST", body: JSON.stringify({ articles }) }),
   deleteArticle: (slugOrId: string | number, articleId: number) =>
     req<void>(`/projects/${slugOrId}/articles/${articleId}`, { method: "DELETE" }),
   replaceMotives: (slugOrId: string | number, sections: { section: string; body: string }[]) =>
@@ -85,6 +89,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ project_id: projectId }),
     }),
+  researchDraft: (projectId: number, idea: string) =>
+    req<{ research: string; articles: { title: string; single_idea: boolean; alineate: string[] }[]; scripted: boolean }>(
+      "/ai/research-draft",
+      { method: "POST", body: JSON.stringify({ project_id: projectId, idea }) },
+    ),
 
   // My projects + lifecycle
   myProjects: () => req<MyProject[]>("/projects/mine"),

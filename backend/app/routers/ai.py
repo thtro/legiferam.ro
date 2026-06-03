@@ -9,11 +9,22 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+import json
+
 from app.ai.client import AIError, chat, chat_json, load_prompt
 from app.config import settings
 from app.database import get_db
 from app.models import Project
-from app.schemas import CopilotMessageIn, CopilotReply, MotivesDraftIn, MotivesDraftOut, ProposalArticle
+from app.schemas import (
+    CopilotMessageIn,
+    CopilotReply,
+    DraftArticle,
+    MotivesDraftIn,
+    MotivesDraftOut,
+    ProposalArticle,
+    ResearchDraftIn,
+    ResearchDraftOut,
+)
 from app.services import render_document
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -63,6 +74,74 @@ async def motives_draft(payload: MotivesDraftIn, db: Session = Depends(get_db)):
         return MotivesDraftOut(sections=sections, scripted=False)
     except (AIError, KeyError, ValueError, TypeError):
         return MotivesDraftOut(sections=_scripted_motives(project), scripted=True)
+
+
+def _parse_json_loose(raw: str) -> dict:
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        start, end = raw.find("{"), raw.rfind("}")
+        if start != -1 and end != -1:
+            return json.loads(raw[start : end + 1])
+        raise
+
+
+def _scripted_research(project: Project | None, idea: str) -> ResearchDraftOut:
+    subject = (project.title if project else "prezenta lege").replace("Lege privind ", "")
+    return ResearchDraftOut(
+        research=(
+            f"Mod DEMO (scriptat): pe baza ideii „{idea[:80]}”, aș verifica legile existente din domeniul "
+            f"{subject} și aș identifica lipsurile. Adaugă o cheie OpenRouter și pune AI_DEMO_SCRIPTED=false "
+            "pentru research real cu căutare web."
+        ),
+        articles=[
+            {"title": "Obiectul legii", "single_idea": True, "alineate": [f"Prezenta lege reglementează {subject}."]},
+            {"title": "Definiții", "single_idea": True, "alineate": ["În înțelesul prezentei legi, termenii de mai jos au următoarea semnificație:", "a) ___ — definiția primului termen;"]},
+            {"title": "Sancțiuni", "single_idea": True, "alineate": ["Nerespectarea obligațiilor prevăzute de prezenta lege constituie contravenție și se sancționează cu amendă de la ___ la ___ lei."]},
+        ],
+        scripted=True,
+    )
+
+
+@router.post("/research-draft", response_model=ResearchDraftOut)
+async def research_draft(payload: ResearchDraftIn, db: Session = Depends(get_db)):
+    """Short web-research on the idea, then a structured first draft of articles
+    (object, definitions, substantive articles, sanctions) for the editor."""
+    project = db.get(Project, payload.project_id)
+    idea = payload.idea.strip()
+    if _is_scripted() or not project or not idea:
+        return _scripted_research(project, idea)
+    prompt = (
+        load_prompt("research_draft.md")
+        .replace("{title}", project.title)
+        .replace("{act_type}", project.act_type)
+        .replace("{idea}", idea)
+    )
+    try:
+        # Web search enabled; allow more time + tokens for research + a full draft.
+        raw = await chat(
+            [{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=2200,
+            web_search=True,
+            timeout=90.0,
+        )
+        data = _parse_json_loose(raw)
+        articles = [
+            DraftArticle(
+                title=str(a.get("title", "")).strip(),
+                single_idea=bool(a.get("single_idea", True)),
+                alineate=[str(x) for x in a.get("alineate", []) if str(x).strip()],
+            )
+            for a in data.get("articles", [])
+            if a.get("alineate")
+        ]
+        if not articles:
+            raise AIError("empty draft")
+        return ResearchDraftOut(research=str(data.get("research", "")).strip(), articles=articles, scripted=False)
+    except (AIError, KeyError, ValueError, TypeError, json.JSONDecodeError):
+        return _scripted_research(project, idea)
+
 
 # Scripted fallback (mirrors data.jsx AI_THREAD) for DEMO / no-key situations.
 SCRIPTED_PROPOSAL = CopilotReply(
