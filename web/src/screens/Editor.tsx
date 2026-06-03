@@ -172,6 +172,13 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
       onPreview={() => navigate(`/proiect/${ps}`)}
       isDraft={!project.is_published && !project.is_demo}
       canEdit={canEdit}
+      readOnlyNote={
+        canEdit
+          ? undefined
+          : project.is_demo
+            ? "Vizualizezi un proiect DEMO — doar citire. Pornește propriul proiect ca să editezi."
+            : "Nu ești inițiator al acestui proiect. Propune o modificare din pagina publică."
+      }
       isCurator={project.viewer_is_curator}
       contributors={project.contributors}
       onPublish={publish}
@@ -308,6 +315,7 @@ function EditorShell({
   hideRail,
   isDraft,
   canEdit,
+  readOnlyNote,
   isCurator,
   contributors,
   onPublish,
@@ -330,6 +338,7 @@ function EditorShell({
   hideRail?: boolean;
   isDraft?: boolean;
   canEdit?: boolean;
+  readOnlyNote?: string;
   isCurator?: boolean;
   contributors?: { name: string; initials: string; role: string; color: string }[];
   onPublish?: () => void | Promise<void>;
@@ -417,6 +426,11 @@ function EditorShell({
           )}
         </div>
       </header>
+      {readOnlyNote && (
+        <div style={{ flex: "none", background: "var(--amber-soft)", borderBottom: "1px solid var(--warn-line)", color: "var(--warn)", fontSize: 13, fontWeight: 600, padding: "8px 26px", display: "flex", alignItems: "center", gap: 10 }}>
+          <Icon name="eye" size={15} /> {readOnlyNote}
+        </div>
+      )}
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {!hideRail && rail}
         <main className="lf-scroll" style={{ flex: 1, overflowY: "auto", padding: hideRail ? "44px 32px" : "30px 36px", minWidth: 0 }}>
@@ -596,12 +610,15 @@ function CentreStage({
               canEdit={canEdit}
               onSave={onSaveArticle}
               onDelete={() => onDeleteArticle(art.id)}
+              onVerify={onRunSemantic}
+              verifyBusy={semanticBusy}
             />
           ))}
         </div>
         <button
           onClick={() => onAddArticle({ title: "Articol nou", single_idea: true, alineate: [""] })}
           disabled={!canEdit}
+          title={canEdit ? "" : "Doar inițiatorii pot edita acest proiect"}
           style={{ marginTop: 14, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r)", padding: "14px", color: "var(--blue)", fontWeight: 600, fontSize: 14, fontFamily: "var(--sans)", cursor: canEdit ? "pointer" : "not-allowed", opacity: canEdit ? 1 : 0.6 }}
         >
           <Icon name="plus" size={17} /> Adaugă articol
@@ -616,7 +633,7 @@ function CentreStage({
         <StageHeader step={8} label="Verificare finală" title="Aproape gata de depunere" sub="Trecem în revistă toate verificările de conformitate." />
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", padding: 22 }}>
           <ComplianceBar checklist={checklist} expandable={false} />
-          {checklist.some((c) => c.kind !== "determinist" && c.state === "todo") && (
+          {canEdit && checklist.some((c) => c.kind !== "determinist" && c.state === "todo") && (
             <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 12, background: "var(--blue-soft)", border: "1px solid #d7e3f1", borderRadius: "var(--r)", padding: "12px 14px" }}>
               <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--navy)", color: "var(--amber)", display: "grid", placeItems: "center", flex: "none" }}>
                 <Icon name="spark" size={17} />
@@ -1002,11 +1019,15 @@ function ArticleCard({
   canEdit,
   onSave,
   onDelete,
+  onVerify,
+  verifyBusy,
 }: {
   art: Article;
   canEdit: boolean;
   onSave: (a: Article) => void | Promise<void>;
   onDelete: () => void | Promise<void>;
+  onVerify?: () => void | Promise<void>;
+  verifyBusy?: boolean;
 }) {
   // Local draft so typing doesn't round-trip on every keystroke; persisted on blur.
   const [draft, setDraft] = useState<Article>(art);
@@ -1084,7 +1105,14 @@ function ArticleCard({
       </div>
       {!draft.single_idea && (
         <div style={{ padding: "0 16px 16px" }}>
-          <ValidatorCard variant="soft" state="warn" repair title="Pare să conțină mai multe obligații" text="Acest articol pare să spună mai multe lucruri deodată. Le putem separa în articole proprii ca fiecare să fie clar." />
+          <ValidatorCard
+            variant="soft"
+            state="warn"
+            repair={canEdit && !!onVerify && !verifyBusy}
+            onRepair={onVerify}
+            title="Pare să conțină mai multe obligații"
+            text={verifyBusy ? "Se verifică cu asistentul…" : "Acest articol pare să spună mai multe lucruri deodată. Le putem separa în articole proprii ca fiecare să fie clar."}
+          />
         </div>
       )}
     </div>
