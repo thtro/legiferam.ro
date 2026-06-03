@@ -1,0 +1,68 @@
+/* tokens.css — LegiFor.ro design system */
+
+:root {
+  /* Brand — institutional navy + discreet amber */
+  --navy:        #1e3a5f;
+  --navy-deep:   #15293f;
+  --navy-700:    #244a73;
+  --blue:        #2f6db0;   /* interactive / links */
+  --blue-soft:   #eaf1f9;
+  --amber:       #c98a1a;   /* warm brand accent */
+  --amber-soft:  #faf2df;
+
+  /* Validator states (positive-first, no strident red) */
+  --ok:        #2f7d5b;  --ok-bg:    #ebf3ee;  --ok-line:  #cfe4d8;
+  --warn:      #b07d18;  --warn-bg:  #fbf3e0;  --warn-line:#ecdcb4;
+  --alert:     #c2522f;  --alert-bg: #fbeae2;  --alert-line:#eccdbf;
+
+  /* Warm-neutral paper surface */
+  --paper:       #f4f3ef;
+  --paper-2:     #eeece6;
+  --surface:     #ffffff;
+  --surface-2:   #faf9f6;
+  --border:      #e4e1da;
+  --border-2:    #d3cfc5;
+  --border-3:    #c2bdb1;
+
+  /* Ink */
+  --ink:         #1b2433;
+  --ink-2:       #3f4855;
+  --muted:       #646b76;
+  --faint:       #8b9099;
+
+  /* Type */
+  --sans: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --serif: Georgia, "Times New Roman", "Liberation Serif", serif;
+
+  /* Shape */
+  --r-sm: 6px;  --r: 10px;  --r-lg: 14px;  --r-xl: 20px;
+  --sh-1: 0 1px 2px rgba(21,41,63,.06), 0 1px 1px rgba(21,41,63,.04);
+  --sh-2: 0 2px 8px rgba(21,41,63,.07), 0 1px 2px rgba(21,41,63,.05);
+  --sh-3: 0 12px 32px rgba(21,41,63,.12), 0 3px 8px rgba(21,41,63,.07);
+  --ring: 0 0 0 3px rgba(47,109,176,.28);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button { font-family: inherit; cursor: pointer; }
+::selection { background: rgba(47,109,176,.18); }
+
+/* Focus visibility for WCAG AA keyboard nav */
+:focus-visible { outline: none; box-shadow: var(--ring); border-radius: var(--r-sm); }
+
+/* Scrollbars — quiet */
+.lf-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.lf-scroll::-webkit-scrollbar-thumb { background: #d7d3ca; border-radius: 99px; border: 3px solid transparent; background-clip: content-box; }
+.lf-scroll::-webkit-scrollbar-thumb:hover { background: #c2bdb1; background-clip: content-box; }
+.lf-scroll::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes lf-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes lf-pop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes lf-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
