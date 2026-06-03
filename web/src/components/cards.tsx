@@ -71,7 +71,7 @@ export function ValidatorCard({
               cursor: "pointer",
             }}
           >
-            <Icon name="wand" size={13} /> Repară cu AI
+            <Icon name="wand" size={13} /> Verifică cu AI
           </button>
         )}
       </div>
@@ -123,7 +123,7 @@ export function ValidatorCard({
               cursor: "pointer",
             }}
           >
-            <Icon name="wand" size={14} /> Repară cu AI
+            <Icon name="wand" size={14} /> Verifică cu AI
           </button>
         )}
       </div>

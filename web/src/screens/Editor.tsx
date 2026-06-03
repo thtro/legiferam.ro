@@ -74,7 +74,7 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
     if (id === activeStep) return "current";
     if (id === 1) return newActType || project ? "done" : "todo";
     if (id === 2) return title ? "done" : "todo";
-    if (id === 3) return articles.some((a) => a.num === 2) ? "done" : "todo";
+    if (id === 3) return articles.some((a) => /defini/i.test(a.title)) ? "done" : "todo";
     if (id === 4) return articles.length ? "done" : "todo";
     if (id === 5) return articles.some((a) => /sanc[țt]i/i.test(a.title)) ? "done" : "todo";
     if (id === 6) return project?.vigoare_days != null ? "done" : "todo";
@@ -560,11 +560,21 @@ function CentreStage({
 }) {
   if (step === 1) return <TipActStep actType={actType} canEdit={canEdit} onSet={onSetActType} />;
   if (step === 2) return <TitleStep title={title} canEdit={canEdit} onSave={onSaveTitle} />;
+  if (step === 3)
+    return (
+      <DefinitionsStep
+        articles={articles}
+        canEdit={canEdit}
+        onAddArticle={onAddArticle}
+        onSaveArticle={onSaveArticle}
+        onDeleteArticle={onDeleteArticle}
+      />
+    );
   if (step === 5) return <SanctionsStep articles={articles} canEdit={canEdit} onAddArticle={onAddArticle} />;
   if (step === 6) return <VigoareStep vigoareDays={vigoareDays} canEdit={canEdit} onSet={onSetVigoare} />;
   if (step === 7) return <MotivesStep motives={motives} canEdit={canEdit} onSave={onSaveMotives} />;
 
-  if (step === 4 || step === 3) {
+  if (step === 4) {
     return (
       <div>
         <StageHeader
@@ -733,6 +743,80 @@ function TitleStep({ title, canEdit, onSave }: { title: string; canEdit: boolean
           text={check ? "Indică obiectul reglementării. Regula de formă e îndeplinită." : "Spune clar ce, pentru cine și în ce domeniu reglementează legea."}
         />
       </div>
+    </div>
+  );
+}
+
+// ── Step 3: Definiții ──────────────────────────────────────────────────────
+function DefinitionsStep({
+  articles,
+  canEdit,
+  onAddArticle,
+  onSaveArticle,
+  onDeleteArticle,
+}: {
+  articles: Article[];
+  canEdit: boolean;
+  onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
+  onSaveArticle: (a: Article) => void | Promise<void>;
+  onDeleteArticle: (id: number) => void | Promise<void>;
+}) {
+  const defs = articles.filter((a) => /defini/i.test(a.title));
+  return (
+    <div>
+      <StageHeader
+        step={3}
+        label="Definiții"
+        title="Definește termenii cheie"
+        sub="Termenii tehnici sau ambigui se definesc explicit, de regulă într-un articol dedicat (ex. Art. 2). Definițiile clare evită interpretările greșite — un singur articol, cu enumerare: a), b), c)."
+      />
+      {defs.length === 0 ? (
+        <>
+          <div style={{ background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r-lg)", padding: "30px 24px", textAlign: "center" }}>
+            <span style={{ width: 46, height: 46, borderRadius: 12, background: "var(--paper-2)", color: "var(--muted)", display: "inline-grid", placeItems: "center", marginBottom: 12 }}>
+              <Icon name="book" size={22} />
+            </span>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)" }}>Încă nu ai un articol de definiții</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 440, marginInline: "auto", lineHeight: 1.55 }}>
+              Adaugă un articol care definește termenii cheie din lege, sau cere-i co-pilotului „Explică-mi regula asta simplu".
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <Btn
+                variant="primary"
+                size="md"
+                icon="plus"
+                disabled={!canEdit}
+                onClick={() =>
+                  onAddArticle({
+                    title: "Definiții",
+                    single_idea: true,
+                    alineate: [
+                      "În înțelesul prezentei legi, termenii de mai jos au următoarea semnificație:",
+                      "___ — definiția primului termen;",
+                    ],
+                  })
+                }
+              >
+                Adaugă articol de definiții
+              </Btn>
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <ValidatorCard variant="soft" state="warn" title="Termenii cheie nu sunt încă definiți" text="Fără definiții, termenii pot fi interpretați diferit. Adaugă un articol dedicat." />
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {defs.map((art) => (
+              <ArticleCard key={art.id} art={art} canEdit={canEdit} onSave={onSaveArticle} onDelete={() => onDeleteArticle(art.id)} />
+            ))}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <ValidatorCard variant="soft" state="ok" title="Ai un articol de definiții" text="Termenii cheie sunt definiți explicit. Verifică să acoperi toți termenii ambigui din lege." />
+          </div>
+        </>
+      )}
     </div>
   );
 }
