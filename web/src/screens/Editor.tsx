@@ -5,6 +5,7 @@ import { ActBadge, Avatar, Btn, ComplianceBar, Eyebrow, Icon, StateMark, iconBtn
 import { api } from "../lib/api";
 import { useApp } from "../lib/app-context";
 import { ACT_TYPES, AI_QUICK_ACTIONS, WIZARD_STEPS } from "../lib/constants";
+import { useProjectRealtime, type Member, type Realtime } from "../lib/realtime";
 import type { ActType, Article, ChecklistItem, CopilotReply, ProjectDetail } from "../lib/types";
 
 const DEMO_SLUG = "transparenta-preturilor-medicamentelor-compensate";
@@ -104,6 +105,12 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const total = checklist.length || 12;
   const canEdit = !!user && !project?.is_demo && !demoMode;
 
+  // Real-time collaboration (presence, per-article locks, live chat) — only for
+  // initiators of a real project. Remote saves trigger a reload of the tree.
+  const rt = useProjectRealtime(mode === "work" ? slug ?? undefined : undefined, canEdit, () => {
+    if (slug) reload(slug);
+  });
+
   // Outline derived live from the article tree + fixed sections.
   const outline = useMemo(() => {
     const arts = articles.map((a) => ({
@@ -146,7 +153,11 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         setShowChecks={() => {}}
         onHome={() => navigate("/")}
         hideRail
-        copilot={<Copilot projectId={undefined} onInsert={() => {}} />}
+        copilot={
+          <aside style={{ width: 372, flex: "none", borderLeft: "1px solid var(--border)", background: "var(--surface-2)", display: "flex", flexDirection: "column", height: "100%" }}>
+            <Copilot projectId={undefined} onInsert={() => {}} />
+          </aside>
+        }
       >
         <NewProjectFlow
           actType={newActType}
@@ -161,33 +172,37 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   if (!project) return <div style={{ padding: 48, color: "var(--muted)" }}>Se încarcă editorul…</div>;
 
   const ps = project.slug;
+  const afterSave = async () => {
+    await reload(ps);
+    rt.notifySaved(); // tell other collaborators to reload the tree
+  };
   const saveArticle = async (a: Article) => {
     if (canEdit && a.id > 0) {
       await api.updateArticle(ps, a.id, { title: a.title, single_idea: a.single_idea, alineate: a.alineate });
-      await reload(ps);
+      await afterSave();
     }
   };
   const addArticle = async (a: { title: string; single_idea: boolean; alineate: string[] }) => {
     if (!canEdit) return;
     await api.addArticle(ps, a);
-    await reload(ps);
+    await afterSave();
   };
   const addArticlesBulk = async (arts: { title: string; single_idea: boolean; alineate: string[] }[]) => {
     if (!canEdit || !arts.length) return;
     await api.addArticlesBulk(ps, arts);
-    await reload(ps);
+    await afterSave();
   };
   const deleteArticle = async (id: number) => {
     if (canEdit && id > 0) {
       await api.deleteArticle(ps, id);
-      await reload(ps);
+      await afterSave();
     }
   };
   const setVigoare = async (days: number) => {
-    if (canEdit) await api.patchProject(ps, { vigoare_days: days }).then(() => reload(ps));
+    if (canEdit) await api.patchProject(ps, { vigoare_days: days }).then(afterSave);
   };
   const saveMotives = async (sections: { section: string; body: string }[]) => {
-    if (canEdit) await api.replaceMotives(ps, sections).then(() => reload(ps));
+    if (canEdit) await api.replaceMotives(ps, sections).then(afterSave);
   };
   const setActTypeProj = async (t: ActType) => {
     if (canEdit) await api.patchProject(ps, { act_type: t }).then(() => reload(ps));
@@ -271,11 +286,15 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
           outline={outline}
           activeOutline={activeOutline}
           onOutline={setActiveOutline}
+          contributors={project.contributors}
+          presence={rt.presence}
         />
       }
       copilot={
-        <Copilot
+        <RightPanel
           projectId={project.id}
+          canChat={canEdit}
+          rt={rt}
           onInsert={(art) =>
             canEdit
               ? addArticle({ title: art.title, single_idea: true, alineate: art.alineate })
@@ -313,6 +332,10 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         onMarkCandidate={markCandidate}
         onPreview={() => navigate(`/proiect/${ps}`)}
         status={project.status}
+        locks={rt.locks}
+        you={rt.you}
+        onLock={rt.lock}
+        onUnlock={rt.unlock}
       />
     </EditorShell>
   );
@@ -537,13 +560,18 @@ function OutlineRail({
   outline,
   activeOutline,
   onOutline,
+  contributors = [],
+  presence = [],
 }: {
   onStep: (id: number) => void;
   stepState: (id: number) => "done" | "current" | "todo" | "warn";
   outline: { id: string; label: string; kind: "section" | "article"; state: string }[];
   activeOutline: string;
   onOutline: (id: string) => void;
+  contributors?: { name: string; initials: string; role: string; color: string }[];
+  presence?: Member[];
 }) {
+  const onlineNames = new Set(presence.map((p) => p.name));
   return (
     <aside className="lf-scroll" style={{ width: 270, flex: "none", borderRight: "1px solid var(--border)", background: "var(--surface)", overflowY: "auto", padding: "18px 0" }}>
       <div style={{ padding: "0 18px" }}>
@@ -604,6 +632,39 @@ function OutlineRail({
           );
         })}
       </div>
+
+      {contributors.length > 0 && (
+        <>
+          <div style={{ height: 1, background: "var(--border)", margin: "16px 18px" }} />
+          <div style={{ padding: "0 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Eyebrow>Membri</Eyebrow>
+            {presence.length > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ok)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 99, background: "var(--ok)" }} /> {presence.length} online
+              </span>
+            )}
+          </div>
+          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {contributors.map((c) => {
+              const online = onlineNames.has(c.name);
+              return (
+                <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ position: "relative", flex: "none" }}>
+                    <Avatar initials={c.initials} color={c.color} size={28} />
+                    {online && (
+                      <span title="Lucrează acum la proiect" style={{ position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: 99, background: "var(--ok)", border: "2px solid var(--surface)" }} />
+                    )}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                    <div style={{ fontSize: 11.5, color: online ? "var(--ok)" : "var(--muted)" }}>{online ? "online · lucrează acum" : c.role}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </aside>
   );
 }
@@ -645,6 +706,10 @@ function CentreStage({
   onMarkCandidate,
   onPreview,
   status,
+  locks,
+  you,
+  onLock,
+  onUnlock,
 }: {
   step: number;
   projectId: number;
@@ -669,6 +734,10 @@ function CentreStage({
   onMarkCandidate: () => void | Promise<void>;
   onPreview: () => void;
   status: string;
+  locks: Record<string, Member>;
+  you: Member | null;
+  onLock: (node: string) => void;
+  onUnlock: (node: string) => void;
 }) {
   if (step === 1) return <TipActStep actType={actType} canEdit={canEdit} onSet={onSetActType} />;
   if (step === 2)
@@ -685,6 +754,10 @@ function CentreStage({
         onDeleteArticle={onDeleteArticle}
         onRunSemantic={onRunSemantic}
         semanticBusy={semanticBusy}
+        locks={locks}
+        you={you}
+        onLock={onLock}
+        onUnlock={onUnlock}
       />
     );
   if (step === 3) return <VigoareStep vigoareDays={vigoareDays} canEdit={canEdit} onSet={onSetVigoare} />;
@@ -803,6 +876,10 @@ function LawTextStep({
   onDeleteArticle,
   onRunSemantic,
   semanticBusy,
+  locks,
+  you,
+  onLock,
+  onUnlock,
 }: {
   projectId: number;
   title: string;
@@ -815,6 +892,10 @@ function LawTextStep({
   onDeleteArticle: (id: number) => void | Promise<void>;
   onRunSemantic: () => void | Promise<void>;
   semanticBusy: boolean;
+  locks: Record<string, Member>;
+  you: Member | null;
+  onLock: (node: string) => void;
+  onUnlock: (node: string) => void;
 }) {
   const [val, setVal] = useState(title);
   useEffect(() => setVal(title), [title]);
@@ -982,17 +1063,24 @@ function LawTextStep({
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {articles.map((art) => (
-            <ArticleCard
-              key={art.id}
-              art={art}
-              canEdit={canEdit}
-              onSave={onSaveArticle}
-              onDelete={() => onDeleteArticle(art.id)}
-              onVerify={onRunSemantic}
-              verifyBusy={semanticBusy}
-            />
-          ))}
+          {articles.map((art) => {
+            const holder = locks[`article:${art.id}`];
+            const lockedByOther = holder && holder.id !== you?.id ? holder : null;
+            return (
+              <ArticleCard
+                key={art.id}
+                art={art}
+                canEdit={canEdit}
+                onSave={onSaveArticle}
+                onDelete={() => onDeleteArticle(art.id)}
+                onVerify={onRunSemantic}
+                verifyBusy={semanticBusy}
+                lockedBy={lockedByOther}
+                onLock={() => onLock(`article:${art.id}`)}
+                onUnlock={() => onUnlock(`article:${art.id}`)}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -1313,6 +1401,9 @@ function ArticleCard({
   onDelete,
   onVerify,
   verifyBusy,
+  lockedBy,
+  onLock,
+  onUnlock,
 }: {
   art: Article;
   canEdit: boolean;
@@ -1320,6 +1411,9 @@ function ArticleCard({
   onDelete: () => void | Promise<void>;
   onVerify?: () => void | Promise<void>;
   verifyBusy?: boolean;
+  lockedBy?: Member | null;
+  onLock?: () => void;
+  onUnlock?: () => void;
 }) {
   // Local draft so typing doesn't round-trip on every keystroke; persisted on blur.
   const [draft, setDraft] = useState<Article>(art);
@@ -1328,6 +1422,18 @@ function ArticleCard({
     setDraft(art);
     setDirty(false);
   }, [art]);
+
+  // Someone else is editing this article (real-time) → read-only for me.
+  const locked = !!lockedBy;
+  const editable = canEdit && !locked;
+  // Acquire the lock when focus enters this card; release when it leaves.
+  const onCardFocus = () => editable && onLock?.();
+  const onCardBlur = (e: React.FocusEvent) => {
+    if (editable && !e.currentTarget.contains(e.relatedTarget as Node)) {
+      commit();
+      onUnlock?.();
+    }
+  };
 
   const commit = () => {
     if (dirty) {
@@ -1344,17 +1450,26 @@ function ArticleCard({
   const removeAlineat = (i: number) => change({ ...draft, alineate: draft.alineate.filter((_, j) => j !== i) });
 
   return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}>
+    <div
+      onFocus={onCardFocus}
+      onBlur={onCardBlur}
+      style={{ background: "var(--surface)", border: locked ? "1.5px solid var(--warn-line)" : "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", overflow: "hidden" }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderBottom: "1px solid var(--border)", background: locked ? "var(--warn-bg)" : "var(--surface-2)" }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--navy)", fontFamily: "var(--serif)" }}>Art. {draft.num}</span>
         <SingleIdeaChip single={draft.single_idea} />
+        {lockedBy && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, color: "var(--warn)", background: "#fff", border: "1px solid var(--warn-line)", borderRadius: 99, padding: "2px 9px" }}>
+            <Avatar initials={lockedBy.initials} color="var(--warn)" size={16} /> {lockedBy.name} editează…
+          </span>
+        )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 4, color: "var(--faint)" }}>
-          {canEdit && dirty && (
+          {editable && dirty && (
             <button style={{ ...iconBtn, color: "var(--blue)" }} title="Salvează" onClick={commit}>
               <Icon name="save" size={15} />
             </button>
           )}
-          {canEdit && (
+          {editable && (
             <button style={iconBtn} title="Șterge articolul" onClick={() => onDelete()}>
               <Icon name="x" size={15} />
             </button>
@@ -1364,10 +1479,9 @@ function ArticleCard({
       <div style={{ padding: "16px 20px" }}>
         <input
           value={draft.title}
-          readOnly={!canEdit}
+          readOnly={!editable}
           placeholder="Titlul articolului"
           onChange={(e) => change({ ...draft, title: e.target.value })}
-          onBlur={commit}
           style={{ fontFamily: "var(--serif)", fontWeight: 700, fontSize: 16, color: "var(--navy-deep)", marginBottom: 9, border: "1px solid transparent", borderRadius: 6, padding: "2px 4px", width: "100%", background: "transparent" }}
         />
         {draft.alineate.map((al, i) => (
@@ -1375,21 +1489,20 @@ function ArticleCard({
             {draft.alineate.length > 1 && <span style={{ fontFamily: "var(--serif)", color: "var(--muted)", fontWeight: 600, paddingTop: 6 }}>({i + 1})</span>}
             <textarea
               value={al}
-              readOnly={!canEdit}
+              readOnly={!editable}
               placeholder="Textul alineatului…"
               onChange={(e) => setAlineat(i, e.target.value)}
-              onBlur={commit}
               rows={2}
-              style={{ flex: 1, fontFamily: "var(--serif)", fontSize: 15.5, lineHeight: 1.68, color: "var(--ink)", border: "1px solid transparent", borderRadius: 6, padding: "4px 6px", background: canEdit ? "var(--surface-2)" : "transparent", resize: "vertical", outline: "none" }}
+              style={{ flex: 1, fontFamily: "var(--serif)", fontSize: 15.5, lineHeight: 1.68, color: "var(--ink)", border: "1px solid transparent", borderRadius: 6, padding: "4px 6px", background: editable ? "var(--surface-2)" : "transparent", resize: "vertical", outline: "none" }}
             />
-            {canEdit && draft.alineate.length > 1 && (
+            {editable && draft.alineate.length > 1 && (
               <button style={iconBtn} title="Șterge alineat" onClick={() => removeAlineat(i)}>
                 <Icon name="x" size={14} />
               </button>
             )}
           </div>
         ))}
-        {canEdit && (
+        {editable && (
           <button onClick={addAlineat} style={{ background: "none", border: "none", color: "var(--blue)", fontSize: 12.5, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer", padding: "4px 0" }}>
             <Icon name="plus" size={14} /> Adaugă alineat
           </button>
@@ -1634,15 +1747,7 @@ function Copilot({ projectId, onInsert }: { projectId?: number; onInsert: (art: 
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [insertedIdx, setInsertedIdx] = useState<number | null>(null);
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("legiferam_copilot_collapsed") === "1");
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const toggleCollapsed = () => {
-    setCollapsed((v) => {
-      localStorage.setItem("legiferam_copilot_collapsed", v ? "0" : "1");
-      return !v;
-    });
-  };
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -1667,24 +1772,8 @@ function Copilot({ projectId, onInsert }: { projectId?: number; onInsert: (art: 
     }
   };
 
-  if (collapsed) {
-    return (
-      <aside style={{ width: 52, flex: "none", borderLeft: "1px solid var(--border)", background: "var(--surface-2)", display: "flex", flexDirection: "column", alignItems: "center", height: "100%", paddingTop: 14, gap: 14 }}>
-        <button onClick={toggleCollapsed} title="Deschide asistentul" style={{ width: 36, height: 36, borderRadius: 9, background: "var(--navy)", color: "var(--amber)", border: "none", display: "grid", placeItems: "center", cursor: "pointer" }}>
-          <Icon name="spark" size={19} />
-        </button>
-        <button onClick={toggleCollapsed} title="Deschide asistentul" style={{ ...iconBtn, color: "var(--muted)" }}>
-          <Icon name="chevron" size={16} style={{ transform: "rotate(180deg)" }} />
-        </button>
-        <div style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 12, fontWeight: 700, color: "var(--muted)", letterSpacing: ".04em", marginTop: 4 }}>
-          Asistent AI
-        </div>
-      </aside>
-    );
-  }
-
   return (
-    <aside style={{ width: 372, flex: "none", borderLeft: "1px solid var(--border)", background: "var(--surface-2)", display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ flex: 1, minHeight: 0, background: "var(--surface-2)", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", background: "var(--surface)", display: "flex", alignItems: "center", gap: 11 }}>
         <span style={{ width: 34, height: 34, borderRadius: 9, background: "var(--navy)", color: "var(--amber)", display: "grid", placeItems: "center", flex: "none" }}>
           <Icon name="spark" size={19} />
@@ -1696,9 +1785,6 @@ function Copilot({ projectId, onInsert }: { projectId?: number; onInsert: (art: 
             {aiStatus?.scripted ? "Mod scriptat (DEMO)" : "Te ajută cu redactarea"}
           </div>
         </div>
-        <button style={iconBtn} title="Restrânge asistentul" onClick={toggleCollapsed}>
-          <Icon name="chevron" size={17} />
-        </button>
       </div>
 
       <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
@@ -1782,6 +1868,124 @@ function Copilot({ projectId, onInsert }: { projectId?: number; onInsert: (art: 
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Right sidebar: live project chat (top, co-authors) + AI assistant (bottom) ──
+function RightPanel({
+  projectId,
+  canChat,
+  rt,
+  onInsert,
+}: {
+  projectId: number;
+  canChat: boolean;
+  rt: Realtime;
+  onInsert: (art: { num: number; title: string; alineate: string[] }) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("legiferam_rightpanel_collapsed") === "1");
+  const toggle = () =>
+    setCollapsed((v) => {
+      localStorage.setItem("legiferam_rightpanel_collapsed", v ? "0" : "1");
+      return !v;
+    });
+
+  if (collapsed) {
+    return (
+      <aside style={{ width: 52, flex: "none", borderLeft: "1px solid var(--border)", background: "var(--surface-2)", display: "flex", flexDirection: "column", alignItems: "center", height: "100%", paddingTop: 14, gap: 14 }}>
+        <button onClick={toggle} title="Deschide panoul" style={{ width: 36, height: 36, borderRadius: 9, background: "var(--navy)", color: "var(--amber)", border: "none", display: "grid", placeItems: "center", cursor: "pointer" }}>
+          <Icon name="spark" size={19} />
+        </button>
+        <button onClick={toggle} title="Deschide panoul" style={{ ...iconBtn, color: "var(--muted)" }}>
+          <Icon name="chevron" size={16} style={{ transform: "rotate(180deg)" }} />
+        </button>
+        <div style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 12, fontWeight: 700, color: "var(--muted)", letterSpacing: ".04em", marginTop: 4 }}>
+          {canChat ? "Chat + Asistent" : "Asistent AI"}
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside style={{ position: "relative", width: 372, flex: "none", borderLeft: "1px solid var(--border)", background: "var(--surface-2)", display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      <button
+        onClick={toggle}
+        title="Restrânge panoul"
+        style={{ position: "absolute", top: 12, right: 10, zIndex: 5, ...iconBtn, color: "var(--muted)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 99 }}
+      >
+        <Icon name="chevron" size={15} />
+      </button>
+      {canChat && <ProjectChat rt={rt} style={{ flex: 1, minHeight: 0, borderBottom: "3px solid var(--border)" }} />}
+      <Copilot projectId={projectId} onInsert={onInsert} />
     </aside>
+  );
+}
+
+function ProjectChat({ rt, style }: { rt: Realtime; style?: React.CSSProperties }) {
+  const [draft, setDraft] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [rt.messages]);
+  const send = () => {
+    if (draft.trim()) {
+      rt.sendChat(draft.trim());
+      setDraft("");
+    }
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", background: "var(--surface)", ...style }}>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 9 }}>
+        <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--blue-soft)", color: "var(--blue)", display: "grid", placeItems: "center", flex: "none" }}>
+          <Icon name="book" size={16} />
+        </span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5, color: "var(--ink)" }}>Chat-ul proiectului</div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)", display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 99, background: rt.connected ? "var(--ok)" : "var(--faint)" }} />
+            {rt.connected ? `${rt.presence.length} online · doar co-inițiatori` : "se conectează…"}
+          </div>
+        </div>
+      </div>
+      <div ref={scrollRef} className="lf-scroll" style={{ flex: 1, minHeight: 80, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {rt.messages.length === 0 && (
+          <div style={{ fontSize: 12.5, color: "var(--faint)", textAlign: "center", margin: "auto 0" }}>
+            Niciun mesaj încă. Vorbește cu co-inițiatorii despre proiect.
+          </div>
+        )}
+        {rt.messages.map((m) => {
+          const mine = m.author_id === rt.you?.id;
+          return (
+            <div key={m.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "88%", display: "flex", gap: 7, flexDirection: mine ? "row-reverse" : "row" }}>
+              {!mine && <Avatar initials={m.author_initials} color="var(--navy-700)" size={24} />}
+              <div>
+                {!mine && <div style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>{m.author_name}</div>}
+                <div style={{ background: mine ? "var(--navy)" : "var(--paper-2)", color: mine ? "#fff" : "var(--ink)", borderRadius: mine ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "7px 11px", fontSize: 13, lineHeight: 1.45 }}>
+                  {m.body}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ padding: 10, borderTop: "1px solid var(--border)", display: "flex", gap: 8 }}>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              send();
+            }
+          }}
+          placeholder="Mesaj pentru co-inițiatori…"
+          style={{ flex: 1, border: "1.5px solid var(--border-2)", borderRadius: 99, padding: "8px 13px", fontSize: 13, outline: "none", fontFamily: "var(--sans)" }}
+        />
+        <Btn variant="solidBlue" size="sm" iconR="arrow" onClick={send} disabled={!rt.connected}>
+          Trimite
+        </Btn>
+      </div>
+    </div>
   );
 }

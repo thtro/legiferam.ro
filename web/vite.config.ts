@@ -10,6 +10,7 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8000",
         changeOrigin: true,
+        ws: true, // proxy WebSocket upgrades (/api/ws/...) for real-time collaboration
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
     },

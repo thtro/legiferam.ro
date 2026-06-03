@@ -273,6 +273,20 @@ class ProjectEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ProjectMessage(Base):
+    """A message in a project's live chat (visible to initiators/co-authors only)."""
+
+    __tablename__ = "project_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    author_name: Mapped[str] = mapped_column(String(160), default="")
+    author_initials: Mapped[str] = mapped_column(String(8), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Support(Base):
     __tablename__ = "supports"
     __table_args__ = (UniqueConstraint("project_id", "user_id", name="uq_support_project_user"),)

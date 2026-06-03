@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import ai, amendments, auth, projects, validator
+from app.routers import ai, amendments, auth, projects, validator, ws
 
 app = FastAPI(
     title="Legiferam.ro API",
@@ -31,3 +31,4 @@ app.include_router(projects.router)
 app.include_router(validator.router)
 app.include_router(ai.router)
 app.include_router(amendments.router)
+app.include_router(ws.router)

@@ -383,6 +383,38 @@ def test_ignore_check_counts_as_passed(seeded_client):
     assert next(c["ignored"] for c in after if c["check_id"] == 10) is True
 
 
+def test_ws_rejects_non_initiator_and_serves_initiator(seeded_client):
+    from starlette.websockets import WebSocketDisconnect
+
+    seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
+    slug = seeded_client.post("/projects", json={"title": "Lege realtime", "act_type": "lege-ordinara"}).json()["slug"]
+
+    # initiator (the demo curator) gets an init frame with presence + empty chat
+    with seeded_client.websocket_connect(f"/ws/projects/{slug}") as ws:
+        init = ws.receive_json()
+        assert init["type"] == "init"
+        assert init["you"]["name"]
+        assert init["messages"] == []
+        # a chat message broadcasts back to the sender and persists
+        ws.send_json({"type": "chat", "body": "salut"})
+        # first frame may be the presence echo; find the chat frame
+        got = ws.receive_json()
+        if got["type"] != "chat":
+            got = ws.receive_json()
+        assert got["type"] == "chat" and got["message"]["body"] == "salut"
+
+    # an outsider (not an initiator) is rejected
+    seeded_client.post("/auth/logout")
+    _new_user(seeded_client, "ws-outsider@test.ro")
+    try:
+        with seeded_client.websocket_connect(f"/ws/projects/{slug}") as ws:
+            ws.receive_json()
+        rejected = False
+    except WebSocketDisconnect:
+        rejected = True
+    assert rejected
+
+
 def test_demo_project_is_write_protected(seeded_client):
     seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
     d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
