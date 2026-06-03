@@ -436,9 +436,13 @@ def replace_motives(
     for m in list(project.motives):
         db.delete(m)
     db.flush()
-    for i, sec in enumerate(payload.sections):
+    # Dedupe by section (keep the last non-empty body for each).
+    bodies: dict[str, str] = {}
+    for sec in payload.sections:
         if sec.body.strip():
-            db.add(MotiveStatement(project_id=project.id, section=sec.section, body=sec.body.strip(), ordine=i))
+            bodies[sec.section] = sec.body.strip()
+    for i, (section, body) in enumerate(bodies.items()):
+        db.add(MotiveStatement(project_id=project.id, section=section, body=body, ordine=i))
     log_event(db, project, user, "edited_motives", "a actualizat expunerea de motive")
     db.commit()
     db.refresh(project)

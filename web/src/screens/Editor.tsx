@@ -261,6 +261,7 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
     >
       <CentreStage
         step={activeStep}
+        projectId={project.id}
         articles={articles}
         canEdit={canEdit}
         checklist={checklist}
@@ -588,6 +589,7 @@ function StageHeader({ step, label, title, sub }: { step: number; label: string;
 
 function CentreStage({
   step,
+  projectId,
   articles,
   canEdit,
   checklist,
@@ -607,6 +609,7 @@ function CentreStage({
   onDeleteArticle,
 }: {
   step: number;
+  projectId: number;
   articles: Article[];
   canEdit: boolean;
   checklist: ChecklistItem[];
@@ -639,7 +642,7 @@ function CentreStage({
     );
   if (step === 5) return <SanctionsStep articles={articles} canEdit={canEdit} onAddArticle={onAddArticle} />;
   if (step === 6) return <VigoareStep vigoareDays={vigoareDays} canEdit={canEdit} onSet={onSetVigoare} />;
-  if (step === 7) return <MotivesStep motives={motives} canEdit={canEdit} onSave={onSaveMotives} />;
+  if (step === 7) return <MotivesStep motives={motives} canEdit={canEdit} onSave={onSaveMotives} projectId={projectId} />;
 
   if (step === 4) {
     return (
@@ -1021,14 +1024,18 @@ function MotivesStep({
   motives,
   canEdit,
   onSave,
+  projectId,
 }: {
   motives: { section: string; body: string }[];
   canEdit: boolean;
   onSave: (sections: { section: string; body: string }[]) => void | Promise<void>;
+  projectId: number;
 }) {
   const build = () => MOTIVE_FIELDS.map((f) => ({ section: f.key, body: motives.find((m) => m.section === f.key)?.body ?? "" }));
   const [draft, setDraft] = useState(build);
   const [dirty, setDirty] = useState(false);
+  const [aiDrafts, setAiDrafts] = useState<Record<string, string>>({});
+  const [drafting, setDrafting] = useState(false);
   useEffect(() => {
     setDraft(build());
     setDirty(false);
@@ -1043,6 +1050,28 @@ function MotivesStep({
   const requiredFilled = MOTIVE_REQUIRED.filter((k) => bodyOf(k).trim()).length;
   const complete = requiredFilled === MOTIVE_REQUIRED.length;
 
+  const prepareDraft = async () => {
+    setDrafting(true);
+    try {
+      const res = await api.motivesDraft(projectId);
+      setAiDrafts(res.sections);
+    } finally {
+      setDrafting(false);
+    }
+  };
+  const acceptDraft = (key: string) => {
+    const text = aiDrafts[key];
+    if (text == null) return;
+    const next = MOTIVE_FIELDS.map((f) => ({ section: f.key, body: f.key === key ? text : bodyOf(f.key) }));
+    setDraft(next);
+    setDirty(true);
+    onSave(next); // single save, outside any state updater (StrictMode-safe)
+    setAiDrafts((a) => {
+      const { [key]: _removed, ...rest } = a;
+      return rest;
+    });
+  };
+
   return (
     <div>
       <StageHeader
@@ -1051,6 +1080,19 @@ function MotivesStep({
         title="De ce e nevoie de această lege?"
         sub="Document obligatoriu care însoțește proiectul. Structura urmează Art. 31 din Legea nr. 24/2000 — instrumentul de prezentare și motivare. Nu e text de lege, ci argumentul tău pentru cei care o vor citi și vota."
       />
+      {canEdit && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, background: "var(--blue-soft)", border: "1px solid #d7e3f1", borderRadius: "var(--r)", padding: "12px 14px" }}>
+          <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--navy)", color: "var(--amber)", display: "grid", placeItems: "center", flex: "none" }}>
+            <Icon name="spark" size={17} />
+          </span>
+          <div style={{ flex: 1, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.45 }}>
+            Asistentul poate pregăti o primă variantă pentru toate secțiunile, pe baza articolelor tale. Apoi accepți sau ajustezi fiecare.
+          </div>
+          <Btn variant="primary" size="md" icon="spark" disabled={drafting} onClick={prepareDraft}>
+            {drafting ? "Se pregătește…" : "Pregătește un Draft cu AI"}
+          </Btn>
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {MOTIVE_FIELDS.map((f) => (
           <div key={f.key}>
@@ -1074,6 +1116,25 @@ function MotivesStep({
               rows={3}
               style={{ width: "100%", border: "1.5px solid var(--border-2)", borderRadius: "var(--r)", padding: "11px 13px", fontFamily: "var(--serif)", fontSize: 15, lineHeight: 1.6, color: "var(--ink)", resize: "vertical", outline: "none", background: canEdit ? "var(--surface)" : "var(--surface-2)" }}
             />
+            {canEdit && aiDrafts[f.key] && (
+              <div style={{ marginTop: 8, background: "var(--surface)", border: "1px solid var(--border)", borderLeft: "3px solid var(--amber)", borderRadius: "var(--r)", padding: "11px 13px", boxShadow: "var(--sh-1)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+                  <span style={{ width: 18, height: 18, borderRadius: 6, background: "var(--navy)", color: "var(--amber)", display: "grid", placeItems: "center", flex: "none" }}>
+                    <Icon name="spark" size={11} />
+                  </span>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--navy)" }}>Draft AI</span>
+                </div>
+                <p style={{ fontFamily: "var(--serif)", fontSize: 14, lineHeight: 1.6, color: "var(--ink)", margin: "0 0 10px" }}>{aiDrafts[f.key]}</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn variant="primary" size="sm" icon="check" onClick={() => acceptDraft(f.key)}>
+                    Acceptă
+                  </Btn>
+                  <Btn variant="ghost" size="sm" icon="x" onClick={() => setAiDrafts((a) => { const { [f.key]: _x, ...rest } = a; return rest; })}>
+                    Respinge
+                  </Btn>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

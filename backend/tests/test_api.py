@@ -78,6 +78,34 @@ def test_login_by_email_after_register(seeded_client):
     assert seeded_client.post("/auth/login", json={"username": "VLAD@example.com", "password": "secret1"}).status_code == 200
 
 
+def test_motives_draft_returns_art31_sections(seeded_client):
+    d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
+    res = seeded_client.post("/ai/motives-draft", json={"project_id": d["id"]}).json()
+    # scripted in tests (no key) -> returns all 7 Art. 31 section drafts
+    assert res["scripted"] is True
+    assert set(res["sections"].keys()) == {
+        "motiv-emitere",
+        "impact-socioeconomic",
+        "impact-financiar",
+        "impact-juridic",
+        "consultari",
+        "informare-publica",
+        "masuri-implementare",
+    }
+    assert all(v.strip() for v in res["sections"].values())
+
+
+def test_motives_replace_dedupes_sections(seeded_client):
+    _new_user(seeded_client, "dedupe@test.ro")
+    slug = seeded_client.post("/projects", json={"title": "Lege dedup motive", "act_type": "lege-ordinara"}).json()["slug"]
+    d = seeded_client.put(
+        f"/projects/{slug}/motives",
+        json={"sections": [{"section": "motiv-emitere", "body": "prima"}, {"section": "motiv-emitere", "body": "a doua"}]},
+    ).json()
+    motive = [m for m in d["motives"] if m["section"] == "motiv-emitere"]
+    assert len(motive) == 1 and motive[0]["body"] == "a doua"
+
+
 def test_copilot_scripted_proposal(seeded_client):
     d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
     cp = seeded_client.post(

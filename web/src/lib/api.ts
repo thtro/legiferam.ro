@@ -80,6 +80,11 @@ export const api = {
   aiStatus: () => req<AIStatus>("/ai/status"),
   copilot: (body: { project_id?: number; action?: string; text?: string }) =>
     req<CopilotReply>("/ai/copilot", { method: "POST", body: JSON.stringify(body) }),
+  motivesDraft: (projectId: number) =>
+    req<{ sections: Record<string, string>; scripted: boolean }>("/ai/motives-draft", {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId }),
+    }),
 
   // My projects + lifecycle
   myProjects: () => req<MyProject[]>("/projects/mine"),

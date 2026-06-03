@@ -239,3 +239,12 @@ class CopilotReply(BaseModel):
     note: str = ""
     article: ProposalArticle | None = None
     scripted: bool = False
+
+
+class MotivesDraftIn(BaseModel):
+    project_id: int
+
+
+class MotivesDraftOut(BaseModel):
+    sections: dict[str, str]
+    scripted: bool = False

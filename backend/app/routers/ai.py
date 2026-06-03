@@ -13,10 +13,56 @@ from app.ai.client import AIError, chat, chat_json, load_prompt
 from app.config import settings
 from app.database import get_db
 from app.models import Project
-from app.schemas import CopilotMessageIn, CopilotReply, ProposalArticle
+from app.schemas import CopilotMessageIn, CopilotReply, MotivesDraftIn, MotivesDraftOut, ProposalArticle
 from app.services import render_document
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+# The Art. 31 (Legea 24/2000) section keys the motives draft must produce.
+MOTIVE_KEYS = [
+    "motiv-emitere",
+    "impact-socioeconomic",
+    "impact-financiar",
+    "impact-juridic",
+    "consultari",
+    "informare-publica",
+    "masuri-implementare",
+]
+
+
+def _scripted_motives(project: Project | None) -> dict[str, str]:
+    """Generic structured draft used in DEMO/scripted mode (no key)."""
+    subject = (project.title if project else "prezenta lege").replace("Lege privind ", "")
+    return {
+        "motiv-emitere": f"Situația actuală privind {subject} prezintă insuficiențe pe care reglementările în vigoare nu le acoperă. Proiectul stabilește un cadru clar și principii de bază pentru a remedia aceste lipsuri.",
+        "impact-socioeconomic": "Măsura aduce beneficii pentru cei vizați, cu costuri de conformare reduse. Efectele asupra mediului economic și social sunt preponderent pozitive.",
+        "impact-financiar": "Impact estimativ redus asupra bugetului general consolidat, atât pe termen scurt (anul curent), cât și pe termen lung (5 ani). Costurile de implementare sunt limitate.",
+        "impact-juridic": "Proiectul se corelează cu legislația în vigoare din domeniu și este compatibil cu normele europene aplicabile.",
+        "consultari": "Se recomandă consultarea autorităților de resort și a organizațiilor reprezentative din domeniu.",
+        "informare-publica": "Proiectul va fi supus dezbaterii publice conform procedurilor de transparență decizională.",
+        "masuri-implementare": "Implementarea nu necesită structuri instituționale noi; se realizează prin autoritățile existente.",
+    }
+
+
+@router.post("/motives-draft", response_model=MotivesDraftOut)
+async def motives_draft(payload: MotivesDraftIn, db: Session = Depends(get_db)):
+    """Generate a structured Expunere de motive draft (Art. 31) for a project.
+
+    Returns one draft per section keyed by the Art. 31 section ids, so the UI can show
+    each draft under the matching field."""
+    project = db.get(Project, payload.project_id)
+    if _is_scripted() or not project:
+        return MotivesDraftOut(sections=_scripted_motives(project), scripted=True)
+    document = render_document(project)
+    prompt = load_prompt("motives_structured.md").replace("{document}", document)
+    try:
+        data = await chat_json([{"role": "user", "content": prompt}], temperature=0.4, max_tokens=1400)
+        sections = {k: str(data.get(k, "")).strip() for k in MOTIVE_KEYS if str(data.get(k, "")).strip()}
+        if not sections:
+            raise AIError("empty")
+        return MotivesDraftOut(sections=sections, scripted=False)
+    except (AIError, KeyError, ValueError, TypeError):
+        return MotivesDraftOut(sections=_scripted_motives(project), scripted=True)
 
 # Scripted fallback (mirrors data.jsx AI_THREAD) for DEMO / no-key situations.
 SCRIPTED_PROPOSAL = CopilotReply(
