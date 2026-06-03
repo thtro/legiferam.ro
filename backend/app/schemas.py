@@ -65,6 +65,15 @@ class MotiveOut(BaseModel):
     body: str
 
 
+class MotiveIn(BaseModel):
+    section: str
+    body: str = ""
+
+
+class MotivesReplace(BaseModel):
+    sections: list[MotiveIn]
+
+
 class ContributorOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     name: str

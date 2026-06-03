@@ -101,6 +101,44 @@ def test_create_project_lifecycle(seeded_client):
     assert [x["num"] for x in arts] == [1]
 
 
+def test_motives_complete_flips_check_eleven(seeded_client):
+    seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
+    slug = seeded_client.post(
+        "/projects", json={"title": "Lege privind pistele pentru biciclete", "act_type": "lege-ordinara"}
+    ).json()["slug"]
+    # partial motives -> check 11 warn
+    seeded_client.put(
+        f"/projects/{slug}/motives",
+        json={"sections": [{"section": "problema", "body": "X"}, {"section": "solutie", "body": "Y"}]},
+    )
+    ck = {c["check_id"]: c["state"] for c in seeded_client.get(f"/projects/{slug}/checklist").json()}
+    assert ck[11] == "warn"
+    # all four sections -> check 11 ok
+    d = seeded_client.put(
+        f"/projects/{slug}/motives",
+        json={
+            "sections": [
+                {"section": "problema", "body": "X"},
+                {"section": "solutie", "body": "Y"},
+                {"section": "impact-bugetar", "body": "Z"},
+                {"section": "efecte", "body": "W"},
+            ]
+        },
+    ).json()
+    states = {c["check_id"]: c["state"] for c in d["checklist"]}
+    assert states[11] == "ok"
+
+
+def test_vigoare_patch_flips_check_eight(seeded_client):
+    seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
+    slug = seeded_client.post(
+        "/projects", json={"title": "Lege privind iluminatul stradal", "act_type": "lege-ordinara"}
+    ).json()["slug"]
+    assert {c["check_id"]: c["state"] for c in seeded_client.get(f"/projects/{slug}/checklist").json()}[8] == "todo"
+    d = seeded_client.patch(f"/projects/{slug}", json={"vigoare_days": 30}).json()
+    assert {c["check_id"]: c["state"] for c in d["checklist"]}[8] == "ok"
+
+
 def test_created_project_appears_in_discovery(seeded_client):
     seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
     seeded_client.post("/projects", json={"title": "Lege privind apa potabilă rurală", "act_type": "lege-ordinara"})

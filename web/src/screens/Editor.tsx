@@ -9,6 +9,15 @@ import type { ActType, Article, ChecklistItem, CopilotReply, ProjectDetail } fro
 
 const DEMO_SLUG = "transparenta-preturilor-medicamentelor-compensate";
 
+// Sections required for a complete expunere de motive (presence drives check 11).
+const MOTIVE_REQUIRED = ["problema", "solutie", "impact-bugetar", "efecte"];
+const MOTIVE_LABELS: Record<string, string> = {
+  problema: "Problema",
+  solutie: "Soluția propusă",
+  "impact-bugetar": "Impact bugetar",
+  efecte: "Efecte așteptate",
+};
+
 export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const params = useParams();
   const navigate = useNavigate();
@@ -59,12 +68,16 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
 
   // Wizard step states from the checklist + structure.
   const stepState = (id: number): "done" | "current" | "todo" | "warn" => {
+    const motiveSections = new Set((project?.motives ?? []).map((m) => m.section));
+    const motiveComplete = MOTIVE_REQUIRED.every((s) => motiveSections.has(s));
     if (id === activeStep) return "current";
     if (id === 1) return newActType || project ? "done" : "todo";
     if (id === 2) return title ? "done" : "todo";
     if (id === 3) return articles.some((a) => a.num === 2) ? "done" : "todo";
     if (id === 4) return articles.length ? "done" : "todo";
-    if (id === 7) return "warn";
+    if (id === 5) return articles.some((a) => /sanc[țt]i/i.test(a.title)) ? "done" : "todo";
+    if (id === 6) return project?.vigoare_days != null ? "done" : "todo";
+    if (id === 7) return motiveSections.size === 0 ? "todo" : motiveComplete ? "done" : "warn";
     return "todo";
   };
 
@@ -112,6 +125,12 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
       await reload(ps);
     }
   };
+  const setVigoare = async (days: number) => {
+    if (canEdit) await api.patchProject(ps, { vigoare_days: days }).then(() => reload(ps));
+  };
+  const saveMotives = async (sections: { section: string; body: string }[]) => {
+    if (canEdit) await api.replaceMotives(ps, sections).then(() => reload(ps));
+  };
 
   return (
     <EditorShell
@@ -156,6 +175,14 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         articles={articles}
         canEdit={canEdit}
         checklist={checklist}
+        title={title}
+        onSaveTitle={(v) => {
+          if (canEdit && v.trim() && v !== project.title) api.patchProject(ps, { title: v }).then(() => reload(ps));
+        }}
+        vigoareDays={project.vigoare_days}
+        onSetVigoare={setVigoare}
+        motives={project.motives}
+        onSaveMotives={saveMotives}
         onSaveArticle={saveArticle}
         onAddArticle={addArticle}
         onDeleteArticle={deleteArticle}
@@ -375,6 +402,12 @@ function CentreStage({
   articles,
   canEdit,
   checklist,
+  title,
+  onSaveTitle,
+  vigoareDays,
+  onSetVigoare,
+  motives,
+  onSaveMotives,
   onSaveArticle,
   onAddArticle,
   onDeleteArticle,
@@ -383,10 +416,21 @@ function CentreStage({
   articles: Article[];
   canEdit: boolean;
   checklist: ChecklistItem[];
+  title: string;
+  onSaveTitle: (v: string) => void;
+  vigoareDays: number | null;
+  onSetVigoare: (days: number) => void | Promise<void>;
+  motives: { section: string; body: string }[];
+  onSaveMotives: (sections: { section: string; body: string }[]) => void | Promise<void>;
   onSaveArticle: (a: Article) => void | Promise<void>;
   onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
   onDeleteArticle: (id: number) => void | Promise<void>;
 }) {
+  if (step === 2) return <TitleStep title={title} canEdit={canEdit} onSave={onSaveTitle} />;
+  if (step === 5) return <SanctionsStep articles={articles} canEdit={canEdit} onAddArticle={onAddArticle} />;
+  if (step === 6) return <VigoareStep vigoareDays={vigoareDays} canEdit={canEdit} onSet={onSetVigoare} />;
+  if (step === 7) return <MotivesStep motives={motives} canEdit={canEdit} onSave={onSaveMotives} />;
+
   if (step === 4 || step === 3) {
     return (
       <div>
@@ -450,19 +494,222 @@ function CentreStage({
     );
   }
 
-  // Generic placeholder for other wizard steps (Sancțiuni / Vigoare / Expunere).
-  const labels: Record<number, [string, string]> = {
-    2: ["Titlu", "Cum se va numi legea ta?"],
-    5: ["Sancțiuni", "Ce se întâmplă dacă regula nu e respectată?"],
-    6: ["Intrare în vigoare", "Când intră legea în vigoare?"],
-    7: ["Expunere de motive", "De ce e nevoie de această lege?"],
-  };
-  const [label, t] = labels[step] ?? ["Pas", "În lucru"];
   return (
     <div>
-      <StageHeader step={step} label={label} title={t} sub="Acest pas este disponibil în editor. Folosește co-pilotul din dreapta pentru ajutor la redactare." />
-      <div style={{ background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r-lg)", padding: "34px 24px", textAlign: "center", color: "var(--muted)" }}>
-        Conținutul pasului „{label}" se redactează aici, cu verificările de conformitate live.
+      <StageHeader step={step} label="Pas" title="Pas în lucru" sub="Folosește co-pilotul din dreapta pentru ajutor la redactare." />
+    </div>
+  );
+}
+
+// ── Step 2: Titlu ──────────────────────────────────────────────────────────
+function TitleStep({ title, canEdit, onSave }: { title: string; canEdit: boolean; onSave: (v: string) => void }) {
+  const [val, setVal] = useState(title);
+  useEffect(() => setVal(title), [title]);
+  const stripped = val.replace(/^Lege privind\s*/i, "");
+  const check = title.length > 25;
+  return (
+    <div>
+      <StageHeader
+        step={2}
+        label="Titlu"
+        title="Cum se va numi legea ta?"
+        sub="Titlul trebuie să spună exact ce reglementează legea. Un titlu precis ajută oamenii — și instituțiile — să înțeleagă din prima despre ce e vorba."
+      />
+      <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "var(--muted)", marginBottom: 8, letterSpacing: ".02em" }}>TITLUL PROIECTULUI DE LEGE</label>
+      <div style={{ display: "flex", alignItems: "center", background: "var(--surface)", border: "1.5px solid var(--border-2)", borderRadius: "var(--r)", padding: "4px 4px 4px 16px", boxShadow: "var(--sh-1)" }}>
+        <span style={{ fontFamily: "var(--serif)", fontSize: 19, color: "var(--muted)", whiteSpace: "nowrap" }}>Lege privind</span>
+        <input
+          value={stripped}
+          readOnly={!canEdit}
+          onChange={(e) => setVal(`Lege privind ${e.target.value}`)}
+          onBlur={() => canEdit && onSave(val)}
+          placeholder="transparența prețurilor medicamentelor compensate"
+          style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: "var(--serif)", fontSize: 19, color: "var(--navy-deep)", padding: "12px 8px", fontWeight: 600 }}
+        />
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <ValidatorCard
+          variant="soft"
+          state={check ? "ok" : "warn"}
+          title={check ? "Titlu precis și complet" : "Titlul pare prea scurt sau vag"}
+          text={check ? "Indică obiectul reglementării. Regula de formă e îndeplinită." : "Spune clar ce, pentru cine și în ce domeniu reglementează legea."}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Step 5: Sancțiuni ──────────────────────────────────────────────────────
+function SanctionsStep({
+  articles,
+  canEdit,
+  onAddArticle,
+}: {
+  articles: Article[];
+  canEdit: boolean;
+  onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
+}) {
+  const hasSanctions = articles.some((a) => /sanc[țt]i|amend|contraven/i.test(a.title));
+  return (
+    <div>
+      <StageHeader
+        step={5}
+        label="Sancțiuni"
+        title="Ce se întâmplă dacă regula nu e respectată?"
+        sub="Orice obligație din lege are nevoie de o sancțiune, altfel rămâne fără efect. Adaugă un articol de sancțiuni proporțional cu fapta."
+      />
+      {hasSanctions ? (
+        <ValidatorCard variant="soft" state="ok" title="Ai un articol de sancțiuni" text="Obligațiile din lege au o consecință. Verifică să fie proporțională cu fapta." />
+      ) : (
+        <>
+          <div style={{ background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r-lg)", padding: "30px 24px", textAlign: "center" }}>
+            <span style={{ width: 46, height: 46, borderRadius: 12, background: "var(--paper-2)", color: "var(--muted)", display: "inline-grid", placeItems: "center", marginBottom: 12 }}>
+              <Icon name="scale" size={22} />
+            </span>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)" }}>Încă nu ai un articol de sancțiuni</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 420, marginInline: "auto", lineHeight: 1.55 }}>
+              Obligațiile introduse nu au deocamdată o consecință. Adaugă un articol de sancțiuni sau cere-i co-pilotului unul proporțional.
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <Btn
+                variant="primary"
+                size="md"
+                icon="plus"
+                disabled={!canEdit}
+                onClick={() =>
+                  onAddArticle({
+                    title: "Sancțiuni",
+                    single_idea: true,
+                    alineate: ["Nerespectarea obligațiilor prevăzute de prezenta lege constituie contravenție și se sancționează cu amendă de la ___ la ___ lei."],
+                  })
+                }
+              >
+                Adaugă articol de sancțiuni
+              </Btn>
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <ValidatorCard variant="soft" state="alert" title="Lipsește sancțiunea pentru o obligație" text="Fără sancțiune, regula nu poate fi aplicată în practică." />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Step 6: Intrare în vigoare ─────────────────────────────────────────────
+function VigoareStep({ vigoareDays, canEdit, onSet }: { vigoareDays: number | null; canEdit: boolean; onSet: (d: number) => void | Promise<void> }) {
+  const options: { days: number; label: string; note: string }[] = [
+    { days: 3, label: "La 3 zile de la publicarea în Monitorul Oficial", note: "Regula implicită din Constituție." },
+    { days: 30, label: "La 30 de zile de la publicare", note: "Timp ca cei vizați să se pregătească." },
+    { days: 180, label: "La 6 luni de la publicare", note: "Pentru obligații care cer pregătire amplă." },
+  ];
+  const valid = vigoareDays != null && vigoareDays >= 3;
+  return (
+    <div>
+      <StageHeader
+        step={6}
+        label="Intrare în vigoare"
+        title="Când intră legea în vigoare?"
+        sub="Regula generală: legea intră în vigoare la minimum 3 zile de la publicare, sau la o dată ulterioară prevăzută în text."
+      />
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {options.map((o) => {
+          const on = vigoareDays === o.days;
+          return (
+            <button
+              key={o.days}
+              disabled={!canEdit}
+              onClick={() => onSet(o.days)}
+              style={{ display: "flex", alignItems: "center", gap: 13, textAlign: "left", background: on ? "var(--blue-soft)" : "var(--surface)", border: "1.5px solid", borderColor: on ? "var(--blue)" : "var(--border)", borderRadius: "var(--r)", padding: "14px 16px", cursor: canEdit ? "pointer" : "default", boxShadow: "var(--sh-1)" }}
+            >
+              <span style={{ width: 20, height: 20, borderRadius: 99, border: "2px solid", borderColor: on ? "var(--blue)" : "var(--border-2)", display: "grid", placeItems: "center", flex: "none" }}>
+                {on && <span style={{ width: 9, height: 9, borderRadius: 99, background: "var(--blue)" }} />}
+              </span>
+              <span style={{ flex: 1 }}>
+                <span style={{ display: "block", fontFamily: "var(--serif)", fontSize: 15.5, fontWeight: 600, color: "var(--navy-deep)" }}>{o.label}</span>
+                <span style={{ display: "block", fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>{o.note}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <ValidatorCard
+          variant="soft"
+          state={valid ? "ok" : "warn"}
+          title={valid ? "Intrare în vigoare validă" : "Alege un termen de intrare în vigoare"}
+          text={valid ? `Termenul de ${vigoareDays} de zile e clar și conform normelor de tehnică legislativă.` : "Minimul legal este de 3 zile de la publicare."}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Step 7: Expunere de motive ─────────────────────────────────────────────
+function MotivesStep({
+  motives,
+  canEdit,
+  onSave,
+}: {
+  motives: { section: string; body: string }[];
+  canEdit: boolean;
+  onSave: (sections: { section: string; body: string }[]) => void | Promise<void>;
+}) {
+  const initial = MOTIVE_REQUIRED.map((s) => ({ section: s, body: motives.find((m) => m.section === s)?.body ?? "" }));
+  const [draft, setDraft] = useState(initial);
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    setDraft(MOTIVE_REQUIRED.map((s) => ({ section: s, body: motives.find((m) => m.section === s)?.body ?? "" })));
+    setDirty(false);
+  }, [motives]);
+
+  const setBody = (section: string, body: string) => {
+    setDraft((d) => d.map((x) => (x.section === section ? { ...x, body } : x)));
+    setDirty(true);
+  };
+  const filled = draft.filter((d) => d.body.trim()).length;
+  return (
+    <div>
+      <StageHeader
+        step={7}
+        label="Expunere de motive"
+        title="De ce e nevoie de această lege?"
+        sub="Expunerea de motive explică problema, soluția și efectele. Nu e text de lege — e argumentul tău pentru cei care o vor citi și vota."
+      />
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {draft.map((d) => (
+          <div key={d.section}>
+            <label style={{ display: "block", fontFamily: "var(--sans)", fontSize: 12, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--amber)", marginBottom: 6 }}>
+              {MOTIVE_LABELS[d.section]}
+            </label>
+            <textarea
+              value={d.body}
+              readOnly={!canEdit}
+              placeholder={`Scrie ${MOTIVE_LABELS[d.section].toLowerCase()}…`}
+              onChange={(e) => setBody(d.section, e.target.value)}
+              onBlur={() => canEdit && dirty && onSave(draft)}
+              rows={3}
+              style={{ width: "100%", border: "1.5px solid var(--border-2)", borderRadius: "var(--r)", padding: "11px 13px", fontFamily: "var(--serif)", fontSize: 15, lineHeight: 1.6, color: "var(--ink)", resize: "vertical", outline: "none", background: canEdit ? "var(--surface)" : "var(--surface-2)" }}
+            />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
+        {canEdit && (
+          <Btn variant="primary" size="md" icon="save" disabled={!dirty} onClick={() => onSave(draft)}>
+            Salvează expunerea
+          </Btn>
+        )}
+        <span style={{ fontSize: 13, color: "var(--muted)" }}>{filled}/{MOTIVE_REQUIRED.length} secțiuni completate</span>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <ValidatorCard
+          variant="soft"
+          state={filled === MOTIVE_REQUIRED.length ? "ok" : "warn"}
+          title={filled === MOTIVE_REQUIRED.length ? "Expunere de motive completă" : "Expunerea de motive e incompletă"}
+          text={filled === MOTIVE_REQUIRED.length ? "Toate secțiunile sunt prezente." : "Completează toate cele patru secțiuni, inclusiv impactul bugetar."}
+        />
       </div>
     </div>
   );

@@ -66,6 +66,8 @@ export const api = {
   ) => req<Article>(`/projects/${slugOrId}/articles`, { method: "POST", body: JSON.stringify(body) }),
   deleteArticle: (slugOrId: string | number, articleId: number) =>
     req<void>(`/projects/${slugOrId}/articles/${articleId}`, { method: "DELETE" }),
+  replaceMotives: (slugOrId: string | number, sections: { section: string; body: string }[]) =>
+    req<ProjectDetail>(`/projects/${slugOrId}/motives`, { method: "PUT", body: JSON.stringify({ sections }) }),
 
   // Validator
   refreshSemantic: (slugOrId: string | number) =>

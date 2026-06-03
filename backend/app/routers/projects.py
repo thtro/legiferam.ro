@@ -13,11 +13,12 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Amendment, Article, Paragraph, Project, User
+from app.models import Amendment, Article, MotiveStatement, Paragraph, Project, User
 from app.schemas import (
     ArticleIn,
     ArticleOut,
     ChecklistItemOut,
+    MotivesReplace,
     ProjectCreate,
     ProjectDetail,
     ProjectPatch,
@@ -324,3 +325,27 @@ def delete_article(
     db.refresh(project)
     _renumber_articles(project)
     db.commit()
+
+
+@router.put("/{slug_or_id}/motives", response_model=ProjectDetail)
+def replace_motives(
+    slug_or_id: str,
+    payload: MotivesReplace,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Replace the expunere de motive sections (problema / solutie / impact-bugetar / efecte …).
+
+    Only non-empty sections are stored, so presence-based check 11 reflects real content.
+    """
+    project = _get_project(db, slug_or_id)
+    _guard_editable(project)
+    for m in list(project.motives):
+        db.delete(m)
+    db.flush()
+    for i, sec in enumerate(payload.sections):
+        if sec.body.strip():
+            db.add(MotiveStatement(project_id=project.id, section=sec.section, body=sec.body.strip(), ordine=i))
+    db.commit()
+    db.refresh(project)
+    return serialize_detail(db, project)
