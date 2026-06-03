@@ -54,13 +54,25 @@ cp .env.production.example .env     # completează: parolă DB, JWT_SECRET (open
 ```
 Web ascultă pe `:8080` (sau `WEB_PORT` din `.env`).
 
-### 3. Reverse proxy prin NPM
-Rutează `legiferam.ro` → `<IP_LXC>:8080`, schema `http`, cu SSL Let's Encrypt (force SSL + HTTP/2).
+### 3. Reverse proxy prin NPM — metoda aleasă: **scriere directă în DB**
+Rutează `legiferam.ro` → `<IP_LXC>:8080`, schema `http`. Folosește scriptul:
+```bash
+# ⚠ după backup la DB-ul NPM (scriptul îl face automat ca prim pas)
+FORWARD_HOST=<IP_LXC> NPM_DB_TYPE=sqlite SQLITE_PATH=/path/to/npm/database.sqlite \
+  ./deploy/npm-add-proxy-host.sh      # sau NPM_DB_TYPE=mysql cu MYSQL_* dacă NPM e pe MariaDB/MySQL
+```
 
-> ⚠️ **Avertisment (cerut de brief):** utilizatorul a cerut configurarea **prin acces direct
-> la DB-ul NPM**. NPM regenerează config-urile Nginx din DB la modificări prin UI/API;
-> **scrierea directă în DB e fragilă**, poate fi suprascrisă, iar schema diferă între versiuni.
-> Alternativa robustă e **API-ul NPM**. **Confirmă metoda înainte** și **fă backup la DB-ul NPM**.
+> ⚠️ **Limitări ale metodei directe-DB (de reținut):**
+> 1. NPM **nu monitorizează** DB-ul — regenerează config-urile nginx doar prin app. După insert
+>    scriptul **repornește containerul NPM** ca să regenereze. Altfel host-ul există în DB dar
+>    fără config nginx.
+> 2. **SSL/Let's Encrypt NU se poate face prin insert în DB** (certbot rulează în NPM). Insertul
+>    direct dă un proxy host **doar HTTP**. Pentru HTTPS, certificatul se cere tot din **UI-ul/API-ul
+>    NPM** după aceea. (Acesta e motivul principal pentru care metoda API e recomandată.)
+> 3. Schema diferă între versiuni NPM — verifică numele coloanelor din `proxy_host` întâi.
+>
+> Am nevoie de la tine: tipul DB-ului NPM (SQLite / MariaDB) + calea/conexiunea, și numele
+> containerului NPM (pentru restart).
 
 ### 4. DNS
 Confirmă că `legiferam.ro` rezolvă spre IP-ul public care ajunge la NPM (A record).
