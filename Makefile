@@ -8,8 +8,19 @@ help: ## Show this help
 up: ## Build and start the full stack for DEV (api bind-mounted + autoreload)
 	docker compose up -d --build
 
-up-prod: ## Build and start the stack WITHOUT the dev override (baked image, no reload)
+up-prod: ## Build and start the PRODUCTION stack (baked image, no reload, API internal)
 	docker compose -f docker-compose.yml up -d --build
+
+deploy: ## Pull + build + start production + health check (run on the server)
+	./deploy/deploy.sh
+
+backup-db: ## Dump the Postgres DB to backups/legiferam-<timestamp>.sql
+	@mkdir -p backups
+	docker compose exec -T db pg_dump -U $${POSTGRES_USER:-legiferam} $${POSTGRES_DB:-legiferam} > backups/legiferam-$$(date +%Y%m%d-%H%M%S).sql
+	@echo "✓ backup written to backups/"
+
+restore-db: ## Restore a dump: make restore-db f=backups/legiferam-XXXX.sql
+	docker compose exec -T db psql -U $${POSTGRES_USER:-legiferam} -d $${POSTGRES_DB:-legiferam} < "$(f)"
 
 down: ## Stop the stack
 	docker compose down

@@ -29,16 +29,20 @@ services:
       sh -c "alembic upgrade head &&
              python -m scripts.seed &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000"
-    ports:
-      - "8000:8000"
+    # API is reachable only on the internal compose network (the web nginx proxies
+    # /api → api:8000). It is NOT published to the host in production; the dev override
+    # adds a host port for Swagger. This keeps only the web port behind the reverse proxy.
+    expose:
+      - "8000"
 
   web:
     build: ./web
     restart: unless-stopped
     depends_on:
       - api
+    # The only public surface: the reverse proxy (NPM) forwards the domain here.
     ports:
-      - "8080:80"
+      - "${WEB_PORT:-8080}:80"
 
 volumes:
   postgres-data:

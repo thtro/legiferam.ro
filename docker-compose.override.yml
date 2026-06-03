@@ -5,6 +5,10 @@ services:
   api:
     volumes:
       - ./backend:/app
+    # Dev-only: publish the API so Swagger (http://localhost:8000/docs) and the Vite
+    # proxy can reach it directly. In production the API stays internal (see base file).
+    ports:
+      - "8000:8000"
     command: >
       sh -c "alembic upgrade head &&
              python -m scripts.seed &&

@@ -24,6 +24,7 @@ dist/
 *.log
 .DS_Store
 postgres-data/
+backups/
 
 # Editor
 .idea/
