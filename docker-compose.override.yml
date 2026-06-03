@@ -1,0 +1,11 @@
+# Dev override (auto-loaded by `docker compose`): bind-mount the backend and run
+# uvicorn with --reload so code edits apply without rebuilding the image.
+# For production-like runs, use: docker compose -f docker-compose.yml up
+services:
+  api:
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m scripts.seed &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"

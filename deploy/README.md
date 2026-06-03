@@ -29,7 +29,8 @@ pct start <VMID>
 git clone https://github.com/thtro/legiferam.ro.git
 cd legiferam.ro
 cp .env.example .env     # completează secretele REALE (OPENROUTER_API_KEY, JWT_SECRET, parole DB)
-make up                  # db + api + web; migrații + seed DEMO rulează automat
+make up-prod             # imagine „coaptă", fără bind-mount/reload (NU `make up`, care e pentru dev)
+                         # db + api + web; migrații + seed DEMO rulează automat
 ```
 Web ascultă pe `:8080`, API pe `:8000` în interiorul LXC-ului.
 

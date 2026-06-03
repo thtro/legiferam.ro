@@ -5,8 +5,11 @@
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-up: ## Build and start the full stack (db + api + web)
+up: ## Build and start the full stack for DEV (api bind-mounted + autoreload)
 	docker compose up -d --build
+
+up-prod: ## Build and start the stack WITHOUT the dev override (baked image, no reload)
+	docker compose -f docker-compose.yml up -d --build
 
 down: ## Stop the stack
 	docker compose down

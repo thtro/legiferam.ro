@@ -45,6 +45,12 @@ export const api = {
     req<ProjectSummary[]>(`/projects${demo === undefined ? "" : `?demo=${demo}`}`),
   getProject: (slugOrId: string | number) => req<ProjectDetail>(`/projects/${slugOrId}`),
   getChecklist: (slugOrId: string | number) => req<ChecklistItem[]>(`/projects/${slugOrId}/checklist`),
+  createProject: (body: { title: string; act_type: string; domain?: string }) =>
+    req<ProjectDetail>("/projects", { method: "POST", body: JSON.stringify(body) }),
+  patchProject: (
+    slugOrId: string | number,
+    body: { title?: string; status?: string; domain?: string; vigoare_days?: number },
+  ) => req<ProjectDetail>(`/projects/${slugOrId}`, { method: "PATCH", body: JSON.stringify(body) }),
   updateArticle: (
     slugOrId: string | number,
     articleId: number,
@@ -54,6 +60,12 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+  addArticle: (
+    slugOrId: string | number,
+    body: { title: string; single_idea: boolean; alineate: string[] },
+  ) => req<Article>(`/projects/${slugOrId}/articles`, { method: "POST", body: JSON.stringify(body) }),
+  deleteArticle: (slugOrId: string | number, articleId: number) =>
+    req<void>(`/projects/${slugOrId}/articles/${articleId}`, { method: "DELETE" }),
 
   // Validator
   refreshSemantic: (slugOrId: string | number) =>

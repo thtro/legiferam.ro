@@ -46,6 +46,19 @@ class ArticleIn(BaseModel):
     alineate: list[str] = []
 
 
+class ProjectCreate(BaseModel):
+    title: str
+    act_type: str = "lege-ordinara"
+    domain: str = ""
+
+
+class ProjectPatch(BaseModel):
+    title: str | None = None
+    status: str | None = None
+    domain: str | None = None
+    vigoare_days: int | None = None
+
+
 class MotiveOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     section: str

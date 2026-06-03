@@ -59,6 +59,55 @@ def test_amendment_structural_diff(seeded_client):
     assert [o["kind"] for o in am["ops"]] == ["unchanged", "mixed", "ins"]
 
 
+def test_create_project_requires_auth(seeded_client):
+    seeded_client.post("/auth/logout")
+    r = seeded_client.post("/projects", json={"title": "Lege fără cont", "act_type": "lege-ordinara"})
+    assert r.status_code == 401
+
+
+def test_create_project_lifecycle(seeded_client):
+    seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
+    # create
+    r = seeded_client.post(
+        "/projects", json={"title": "Lege privind energia regenerabilă în comunități", "act_type": "lege-ordinara"}
+    )
+    assert r.status_code == 201
+    p = r.json()
+    slug = p["slug"]
+    assert slug.startswith("lege-privind-energia-regenerabila")
+    assert p["passed"] == 1 and p["articles"] == []  # only act-type passes on an empty project
+
+    # add Art. 1 with an object -> check 3 turns ok (2/12)
+    a = seeded_client.post(
+        f"/projects/{slug}/articles",
+        json={"title": "Obiectul legii", "single_idea": True, "alineate": ["Prezenta lege stabilește cadrul..."]},
+    ).json()
+    assert a["num"] == 1
+    d = seeded_client.get(f"/projects/{slug}").json()
+    assert d["passed"] == 2
+    assert next(c["state"] for c in d["checklist"] if c["check_id"] == 3) == "ok"
+
+    # entry-into-force >= 3 days -> check 8 ok (3/12)
+    d = seeded_client.patch(f"/projects/{slug}", json={"vigoare_days": 30}).json()
+    assert d["passed"] == 3
+
+    # add a second article, then delete the first -> renumbered to 1
+    seeded_client.post(
+        f"/projects/{slug}/articles", json={"title": "Definiții", "single_idea": True, "alineate": ["..."]}
+    )
+    art_id = seeded_client.get(f"/projects/{slug}").json()["articles"][0]["id"]
+    assert seeded_client.delete(f"/projects/{slug}/articles/{art_id}").status_code == 204
+    arts = seeded_client.get(f"/projects/{slug}").json()["articles"]
+    assert [x["num"] for x in arts] == [1]
+
+
+def test_created_project_appears_in_discovery(seeded_client):
+    seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
+    seeded_client.post("/projects", json={"title": "Lege privind apa potabilă rurală", "act_type": "lege-ordinara"})
+    slugs = {p["slug"] for p in seeded_client.get("/projects").json()}
+    assert "lege-privind-apa-potabila-rurala" in slugs
+
+
 def test_demo_project_is_write_protected(seeded_client):
     seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
     d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()

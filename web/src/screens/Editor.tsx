@@ -24,15 +24,17 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const [showChecks, setShowChecks] = useState(false);
   const [newActType, setNewActType] = useState<ActType | null>(null);
 
+  const reload = (s: string) =>
+    api.getProject(s).then((p) => {
+      setProject(p);
+      setArticles(p.articles);
+      setChecklist(p.checklist);
+      setTitle(p.title);
+    });
+
   useEffect(() => {
-    if (mode === "work" && slug) {
-      api.getProject(slug).then((p) => {
-        setProject(p);
-        setArticles(p.articles);
-        setChecklist(p.checklist);
-        setTitle(p.title);
-      });
-    }
+    if (mode === "work" && slug) reload(slug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, slug]);
 
   const passed = checklist.filter((c) => c.state === "ok").length;
@@ -80,12 +82,11 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         hideRail
         copilot={<Copilot projectId={undefined} onInsert={() => {}} />}
       >
-        <ActTypeChooser
-          onPick={(t) => {
-            setNewActType(t);
-            // For round 1, jump into the demo project's editor as the working canvas.
-            navigate(`/editor/${DEMO_SLUG}`);
-          }}
+        <NewProjectFlow
+          actType={newActType}
+          setActType={setNewActType}
+          isAuthed={!!user}
+          onCreated={(p) => navigate(`/editor/${p.slug}`)}
         />
       </EditorShell>
     );
@@ -93,18 +94,40 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
 
   if (!project) return <div style={{ padding: 48, color: "var(--muted)" }}>Se încarcă editorul…</div>;
 
+  const ps = project.slug;
+  const saveArticle = async (a: Article) => {
+    if (canEdit && a.id > 0) {
+      await api.updateArticle(ps, a.id, { title: a.title, single_idea: a.single_idea, alineate: a.alineate });
+      await reload(ps);
+    }
+  };
+  const addArticle = async (a: { title: string; single_idea: boolean; alineate: string[] }) => {
+    if (!canEdit) return;
+    await api.addArticle(ps, a);
+    await reload(ps);
+  };
+  const deleteArticle = async (id: number) => {
+    if (canEdit && id > 0) {
+      await api.deleteArticle(ps, id);
+      await reload(ps);
+    }
+  };
+
   return (
     <EditorShell
       title={title}
       onTitle={setTitle}
+      onTitleCommit={async (v) => {
+        if (canEdit && v.trim() && v !== project.title) await api.patchProject(ps, { title: v }).then(() => reload(ps));
+      }}
       actType={project.act_type}
       passed={passed}
       total={total}
       checklist={checklist}
       showChecks={showChecks}
       setShowChecks={setShowChecks}
-      onHome={() => navigate(`/proiect/${project.slug}`)}
-      onPreview={() => navigate(`/proiect/${project.slug}`)}
+      onHome={() => navigate(`/proiect/${ps}`)}
+      onPreview={() => navigate(`/proiect/${ps}`)}
       rail={
         <OutlineRail
           onStep={setActiveStep}
@@ -118,10 +141,12 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         <Copilot
           projectId={project.id}
           onInsert={(art) =>
-            setArticles((prev) => [
-              ...prev,
-              { id: -Date.now(), num: prev.length + 1, title: art.title, single_idea: true, alineate: art.alineate },
-            ])
+            canEdit
+              ? addArticle({ title: art.title, single_idea: true, alineate: art.alineate })
+              : setArticles((prev) => [
+                  ...prev,
+                  { id: -Date.now(), num: prev.length + 1, title: art.title, single_idea: true, alineate: art.alineate },
+                ])
           }
         />
       }
@@ -129,11 +154,11 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
       <CentreStage
         step={activeStep}
         articles={articles}
-        setArticles={setArticles}
         canEdit={canEdit}
-        slug={project.slug}
         checklist={checklist}
-        onRefreshChecklist={() => api.getChecklist(project.slug).then(setChecklist)}
+        onSaveArticle={saveArticle}
+        onAddArticle={addArticle}
+        onDeleteArticle={deleteArticle}
       />
     </EditorShell>
   );
@@ -143,6 +168,7 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
 function EditorShell({
   title,
   onTitle,
+  onTitleCommit,
   actType,
   passed,
   total,
@@ -158,6 +184,7 @@ function EditorShell({
 }: {
   title: string;
   onTitle?: (v: string) => void;
+  onTitleCommit?: (v: string) => void;
   actType: ActType;
   passed: number;
   total: number;
@@ -192,6 +219,7 @@ function EditorShell({
             onBlur={(e) => {
               e.target.style.borderColor = "transparent";
               e.target.style.background = "transparent";
+              onTitleCommit?.(e.target.value);
             }}
           />
         </div>
@@ -345,19 +373,19 @@ function StageHeader({ step, label, title, sub }: { step: number; label: string;
 function CentreStage({
   step,
   articles,
-  setArticles,
   canEdit,
-  slug,
   checklist,
-  onRefreshChecklist,
+  onSaveArticle,
+  onAddArticle,
+  onDeleteArticle,
 }: {
   step: number;
   articles: Article[];
-  setArticles: React.Dispatch<React.SetStateAction<Article[]>>;
   canEdit: boolean;
-  slug: string;
   checklist: ChecklistItem[];
-  onRefreshChecklist: () => void;
+  onSaveArticle: (a: Article) => void | Promise<void>;
+  onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
+  onDeleteArticle: (id: number) => void | Promise<void>;
 }) {
   if (step === 4 || step === 3) {
     return (
@@ -368,25 +396,26 @@ function CentreStage({
           title="Scrie articolele legii"
           sub="Fiecare articol exprimă o singură idee sau obligație. Numerotarea alineatelor se face automat. Te anunțăm dacă un articol pare să spună prea multe deodată."
         />
+        {articles.length === 0 && (
+          <div style={{ background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r-lg)", padding: "30px 24px", textAlign: "center", color: "var(--muted)", marginBottom: 14 }}>
+            Încă nu ai niciun articol. Adaugă primul articol sau cere co-pilotului „Transformă ideea mea în articol conform”.
+          </div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {articles.map((art, idx) => (
+          {articles.map((art) => (
             <ArticleCard
               key={art.id}
               art={art}
               canEdit={canEdit}
-              onChange={(next) => setArticles((prev) => prev.map((a, i) => (i === idx ? next : a)))}
-              onSave={async (next) => {
-                if (canEdit && next.id > 0) {
-                  await api.updateArticle(slug, next.id, { title: next.title, single_idea: next.single_idea, alineate: next.alineate });
-                  onRefreshChecklist();
-                }
-              }}
+              onSave={onSaveArticle}
+              onDelete={() => onDeleteArticle(art.id)}
             />
           ))}
         </div>
         <button
-          onClick={() => canEdit && setArticles((prev) => [...prev, { id: -Date.now(), num: prev.length + 1, title: "Articol nou", single_idea: true, alineate: [""] }])}
-          style={{ marginTop: 14, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r)", padding: "14px", color: "var(--blue)", fontWeight: 600, fontSize: 14, fontFamily: "var(--sans)", cursor: "pointer", opacity: canEdit ? 1 : 0.6 }}
+          onClick={() => onAddArticle({ title: "Articol nou", single_idea: true, alineate: [""] })}
+          disabled={!canEdit}
+          style={{ marginTop: 14, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r)", padding: "14px", color: "var(--blue)", fontWeight: 600, fontSize: 14, fontFamily: "var(--sans)", cursor: canEdit ? "pointer" : "not-allowed", opacity: canEdit ? 1 : 0.6 }}
         >
           <Icon name="plus" size={17} /> Adaugă articol
         </button>
@@ -442,54 +471,76 @@ function CentreStage({
 function ArticleCard({
   art,
   canEdit,
-  onChange,
   onSave,
+  onDelete,
 }: {
   art: Article;
   canEdit: boolean;
-  onChange: (a: Article) => void;
-  onSave: (a: Article) => void;
+  onSave: (a: Article) => void | Promise<void>;
+  onDelete: () => void | Promise<void>;
 }) {
-  const setAlineat = (i: number, text: string) => {
-    const alineate = art.alineate.map((a, j) => (j === i ? text : a));
-    onChange({ ...art, alineate });
+  // Local draft so typing doesn't round-trip on every keystroke; persisted on blur.
+  const [draft, setDraft] = useState<Article>(art);
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    setDraft(art);
+    setDirty(false);
+  }, [art]);
+
+  const commit = () => {
+    if (dirty) {
+      onSave(draft);
+      setDirty(false);
+    }
   };
-  const addAlineat = () => onChange({ ...art, alineate: [...art.alineate, ""] });
-  const removeAlineat = (i: number) => onChange({ ...art, alineate: art.alineate.filter((_, j) => j !== i) });
+  const change = (next: Article) => {
+    setDraft(next);
+    setDirty(true);
+  };
+  const setAlineat = (i: number, text: string) => change({ ...draft, alineate: draft.alineate.map((a, j) => (j === i ? text : a)) });
+  const addAlineat = () => change({ ...draft, alineate: [...draft.alineate, ""] });
+  const removeAlineat = (i: number) => change({ ...draft, alineate: draft.alineate.filter((_, j) => j !== i) });
 
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--navy)", fontFamily: "var(--serif)" }}>Art. {art.num}</span>
-        <SingleIdeaChip single={art.single_idea} />
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--navy)", fontFamily: "var(--serif)" }}>Art. {draft.num}</span>
+        <SingleIdeaChip single={draft.single_idea} />
         <div style={{ marginLeft: "auto", display: "flex", gap: 4, color: "var(--faint)" }}>
-          {canEdit && (
-            <button style={iconBtn} title="Salvează" onClick={() => onSave(art)}>
+          {canEdit && dirty && (
+            <button style={{ ...iconBtn, color: "var(--blue)" }} title="Salvează" onClick={commit}>
               <Icon name="save" size={15} />
+            </button>
+          )}
+          {canEdit && (
+            <button style={iconBtn} title="Șterge articolul" onClick={() => onDelete()}>
+              <Icon name="x" size={15} />
             </button>
           )}
         </div>
       </div>
       <div style={{ padding: "16px 20px" }}>
         <input
-          value={art.title}
+          value={draft.title}
           readOnly={!canEdit}
-          onChange={(e) => onChange({ ...art, title: e.target.value })}
-          onBlur={() => onSave(art)}
+          placeholder="Titlul articolului"
+          onChange={(e) => change({ ...draft, title: e.target.value })}
+          onBlur={commit}
           style={{ fontFamily: "var(--serif)", fontWeight: 700, fontSize: 16, color: "var(--navy-deep)", marginBottom: 9, border: "1px solid transparent", borderRadius: 6, padding: "2px 4px", width: "100%", background: "transparent" }}
         />
-        {art.alineate.map((al, i) => (
+        {draft.alineate.map((al, i) => (
           <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-start", margin: "0 0 8px" }}>
-            {art.alineate.length > 1 && <span style={{ fontFamily: "var(--serif)", color: "var(--muted)", fontWeight: 600, paddingTop: 6 }}>({i + 1})</span>}
+            {draft.alineate.length > 1 && <span style={{ fontFamily: "var(--serif)", color: "var(--muted)", fontWeight: 600, paddingTop: 6 }}>({i + 1})</span>}
             <textarea
               value={al}
               readOnly={!canEdit}
+              placeholder="Textul alineatului…"
               onChange={(e) => setAlineat(i, e.target.value)}
-              onBlur={() => onSave(art)}
+              onBlur={commit}
               rows={2}
               style={{ flex: 1, fontFamily: "var(--serif)", fontSize: 15.5, lineHeight: 1.68, color: "var(--ink)", border: "1px solid transparent", borderRadius: 6, padding: "4px 6px", background: canEdit ? "var(--surface-2)" : "transparent", resize: "vertical", outline: "none" }}
             />
-            {canEdit && art.alineate.length > 1 && (
+            {canEdit && draft.alineate.length > 1 && (
               <button style={iconBtn} title="Șterge alineat" onClick={() => removeAlineat(i)}>
                 <Icon name="x" size={14} />
               </button>
@@ -502,9 +553,9 @@ function ArticleCard({
           </button>
         )}
       </div>
-      {!art.single_idea && (
+      {!draft.single_idea && (
         <div style={{ padding: "0 16px 16px" }}>
-          <ValidatorCard variant="soft" state="warn" repair title="Pare să conțină mai multe obligații" text="Art. 3 spune trei lucruri: afișarea, actualizarea în 48h și bonul informativ. Le putem separa în articole proprii ca fiecare să fie clar." />
+          <ValidatorCard variant="soft" state="warn" repair title="Pare să conțină mai multe obligații" text="Acest articol pare să spună mai multe lucruri deodată. Le putem separa în articole proprii ca fiecare să fie clar." />
         </div>
       )}
     </div>
@@ -518,6 +569,98 @@ function SingleIdeaChip({ single }: { single: boolean }) {
       <Icon name={single ? "check" : "dot"} size={single ? 13 : 11} stroke={2.6} />
       {single ? "O singură idee" : "Mai multe obligații"}
     </span>
+  );
+}
+
+// ── New project: act type → title → create ─────────────────────────────────
+function NewProjectFlow({
+  actType,
+  setActType,
+  isAuthed,
+  onCreated,
+}: {
+  actType: ActType | null;
+  setActType: (t: ActType) => void;
+  isAuthed: boolean;
+  onCreated: (p: ProjectDetail) => void;
+}) {
+  const navigate = useNavigate();
+  const [sub, setSub] = useState<"act" | "title">("act");
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (sub === "act") {
+    return (
+      <ActTypeChooser
+        onPick={(t) => {
+          setActType(t);
+          setSub("title");
+        }}
+      />
+    );
+  }
+
+  const fullTitle = title.trim().startsWith("Lege") ? title.trim() : `Lege privind ${title.trim()}`;
+  const create = async () => {
+    if (!title.trim()) {
+      setError("Scrie un titlu pentru proiect.");
+      return;
+    }
+    if (!isAuthed) {
+      // Writes require a session — send to login (demo/demo), then come back here.
+      navigate("/login");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const p = await api.createProject({ title: fullTitle, act_type: actType ?? "lege-ordinara" });
+      onCreated(p);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Nu am putut crea proiectul.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 620, margin: "0 auto" }}>
+      <StageHeader
+        step={2}
+        label="Titlu"
+        title="Cum se va numi legea ta?"
+        sub="Titlul trebuie să spună exact ce reglementează legea. Un titlu precis ajută oamenii — și instituțiile — să înțeleagă din prima despre ce e vorba."
+      />
+      <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "var(--muted)", marginBottom: 8, letterSpacing: ".02em" }}>TITLUL PROIECTULUI DE LEGE</label>
+      <div style={{ display: "flex", alignItems: "center", background: "var(--surface)", border: "1.5px solid var(--border-2)", borderRadius: "var(--r)", padding: "4px 4px 4px 16px", boxShadow: "var(--sh-1)" }}>
+        <span style={{ fontFamily: "var(--serif)", fontSize: 19, color: "var(--muted)", whiteSpace: "nowrap" }}>Lege privind</span>
+        <input
+          autoFocus
+          value={title.replace(/^Lege privind\s*/i, "")}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") create();
+          }}
+          placeholder="transparența prețurilor medicamentelor compensate"
+          style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: "var(--serif)", fontSize: 19, color: "var(--navy-deep)", padding: "12px 8px", fontWeight: 600 }}
+        />
+      </div>
+      {error && <div style={{ color: "var(--alert)", fontSize: 13.5, marginTop: 10 }}>{error}</div>}
+      {!isAuthed && (
+        <div style={{ marginTop: 12 }}>
+          <ValidatorCard variant="soft" state="warn" title="Trebuie să fii autentificat ca să creezi un proiect" text="Folosește contul demo/demo. Te ducem la autentificare." />
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
+        <Btn variant="outline" size="md" onClick={() => setSub("act")}>
+          Înapoi
+        </Btn>
+        <Btn variant="primary" size="md" iconR="arrow" disabled={busy} onClick={create}>
+          {busy ? "Se creează…" : isAuthed ? "Creează proiectul" : "Autentifică-te și creează"}
+        </Btn>
+      </div>
+    </div>
   );
 }
 
