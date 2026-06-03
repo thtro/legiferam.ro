@@ -8,17 +8,19 @@
 # It does NOT touch DNS or the Nginx Proxy Manager — that is a separate, confirmed step.
 set -euo pipefail
 
-# ── Parameters to confirm before running ───────────────────────────────────
-VMID="${VMID:-150}"                                  # free Proxmox VMID
+# ── Parameters (defaults match the proxmox-armour environment, discovered read-only) ──
+# Host: srv.armour-afc.eu (PVE 9.2). LXCs use STATIC IPs on vmbr1 (10.10.10.0/24, gw .1).
+# Public 194.35.120.98 (vmbr0) DNAT :80/:443 → NPM at 10.10.10.2 (CT 101).
+VMID="${VMID:-102}"                                  # next free id (confirmed)
 HOSTNAME="legiferam"
-TEMPLATE="${TEMPLATE:-local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst}"
-STORAGE="${STORAGE:-local-lvm}"
+TEMPLATE="${TEMPLATE:-local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst}"
+STORAGE="${STORAGE:-local}"                          # only `local` (dir) storage exists
 DISK_GB="${DISK_GB:-16}"
 CORES="${CORES:-2}"
 RAM_MB="${RAM_MB:-2048}"
-BRIDGE="${BRIDGE:-vmbr0}"
-# IP: "dhcp" or a static "CIDR,gw" e.g. "192.168.1.50/24,gw=192.168.1.1"
-NET_IP="${NET_IP:-dhcp}"
+BRIDGE="${BRIDGE:-vmbr1}"                            # internal bridge the other CTs use
+# Static IP on vmbr1 (10.10.10.6 confirmed free). NOT DHCP — there is no DHCP on vmbr1.
+NET_IP="${NET_IP:-10.10.10.6/24,gw=10.10.10.1}"
 REPO="${REPO:-https://github.com/thtro/legiferam.ro.git}"
 
 echo "▶ Creating LXC $VMID ($HOSTNAME) — cores=$CORES ram=${RAM_MB}MB disk=${DISK_GB}G net=$NET_IP"
