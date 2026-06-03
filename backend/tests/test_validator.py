@@ -36,9 +36,10 @@ def test_vigoare_minimum_three_days():
 
 
 def test_motive_sections_completeness():
-    full = ["problema", "solutie", "impact-bugetar", "efecte"]
+    # Required sections per Art. 31 din Legea 24/2000 (core a–d).
+    full = ["motiv-emitere", "impact-socioeconomic", "impact-financiar", "impact-juridic"]
     assert _by_id(run_deterministic(_view(motive_sections=full)))[11]["state"] == "ok"
-    partial = ["problema", "solutie", "efecte"]  # missing impact-bugetar
+    partial = ["motiv-emitere", "impact-socioeconomic", "impact-juridic"]  # missing impact-financiar
     assert _by_id(run_deterministic(_view(motive_sections=partial)))[11]["state"] == "warn"
     assert _by_id(run_deterministic(_view(motive_sections=[])))[11]["state"] == "todo"
 
@@ -58,7 +59,7 @@ def test_demo_project_scores_eight_of_twelve():
         act_type="lege-ordinara",
         vigoare_days=30,
         articles=[art1],
-        motive_sections=["problema", "solutie", "efecte"],  # missing impact-bugetar -> warn
+        motive_sections=["motiv-emitere", "impact-socioeconomic", "impact-juridic"],  # missing impact-financiar -> warn
         all_text="Lista de medicamente; alin. (1)",  # no external law ref -> 12 todo
     )
     r = _by_id(run_deterministic(view))

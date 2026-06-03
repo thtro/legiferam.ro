@@ -48,9 +48,9 @@
       }
     ],
     "motives": [
-      { "section": "problema", "body": "Pacienții nu cunosc, la momentul cumpărării, cât din prețul unui medicament compensat este suportat de stat și cât plătesc ei efectiv. Lipsa transparenței face dificilă alegerea informată și compararea între farmacii." },
-      { "section": "solutie", "body": "Legea obligă farmaciile să afișeze vizibil prețul de vânzare, prețul de referință și valoarea compensată, actualizate la zi, la punctul de eliberare." },
-      { "section": "efecte", "body": "Mai multă transparență pentru pacienți, presiune competitivă pe adaosul comercial și o bază de date publică despre prețuri reale." }
+      { "section": "motiv-emitere", "body": "Pacienții nu cunosc, la momentul cumpărării, cât din prețul unui medicament compensat este suportat de stat și cât plătesc ei efectiv. Reglementările actuale nu impun afișarea prețului de referință. Legea introduce obligația de afișare vizibilă a prețului, prețului de referință și valorii compensate, la punctul de eliberare." },
+      { "section": "impact-socioeconomic", "body": "Mai multă transparență pentru pacienți, presiune competitivă pe adaosul comercial al farmaciilor și o bază publică despre prețuri reale. Costuri minore de conformare pentru farmacii (afișaj/etichetare)." },
+      { "section": "impact-juridic", "body": "Se corelează cu reglementările existente din domeniul reformei sănătății și al asigurărilor de sănătate. Măsura este compatibilă cu normele europene privind transparența prețurilor la medicamente." }
     ],
     "contributors": [
       { "username": "ana.munteanu", "name": "Ana Munteanu", "initials": "AM", "role": "Curator", "color": "#1e3a5f" },

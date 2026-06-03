@@ -26,8 +26,17 @@ export function Dotted() {
   return <span style={{ width: 3, height: 3, borderRadius: 99, background: "var(--border-3)" }} />;
 }
 
+// Expunerea de motive — secțiuni conform Art. 31 din Legea 24/2000.
 const SECTION_LABELS: Record<string, string> = {
-  problema: "Problema",
+  "motiv-emitere": "a) Motivul emiterii actului",
+  "impact-socioeconomic": "b) Impactul socioeconomic",
+  "impact-financiar": "c) Impactul financiar asupra bugetului",
+  "impact-juridic": "d) Impactul asupra sistemului juridic",
+  consultari: "e) Consultări derulate",
+  "informare-publica": "f) Activități de informare publică",
+  "masuri-implementare": "g) Măsuri de implementare",
+  // legacy fallbacks
+  problema: "Situația actuală",
   solutie: "Soluția propusă",
   "impact-bugetar": "Impact bugetar",
   efecte: "Efecte așteptate",
@@ -325,7 +334,9 @@ function MotiveTab({ project }: { project: ProjectDetail }) {
           <p style={{ fontFamily: "var(--serif)", fontSize: 15.5, lineHeight: 1.7, color: "var(--ink)", margin: 0 }}>{m.body}</p>
         </div>
       ))}
-      <ValidatorCard variant="line" state="warn" title="Secțiunea de impact bugetar lipsește" text="Adaugă o estimare a costurilor pentru a completa expunerea de motive." repair />
+      {!project.motives.some((m) => m.section === "impact-financiar") && (
+        <ValidatorCard variant="line" state="warn" title="Lipsește impactul financiar asupra bugetului" text="Conform Art. 31 din Legea 24/2000, expunerea trebuie să estimeze efectele pe bugetul general consolidat (termen scurt și 5 ani)." />
+      )}
     </div>
   );
 }

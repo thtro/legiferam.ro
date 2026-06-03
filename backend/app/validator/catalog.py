@@ -36,5 +36,7 @@ CHECK_BY_ID: dict[int, CheckMeta] = {c.id: c for c in CHECKS}
 # The deterministic engine can produce a verdict for these check ids.
 DETERMINISTIC_IDS = {2, 3, 8, 11, 12}
 
-# Required sections (a–f) for a complete expunere de motive.
-MOTIVE_SECTIONS = ["problema", "solutie", "impact-bugetar", "efecte"]
+# Core sections required for a complete expunere de motive, per Art. 31 din Legea
+# 24/2000 (a–d: motivare + cele trei evaluări de impact). Sections e–g (consultări,
+# informare publică, măsuri de implementare) sunt încurajate, dar nu blochează check 11.
+MOTIVE_SECTIONS = ["motiv-emitere", "impact-socioeconomic", "impact-financiar", "impact-juridic"]

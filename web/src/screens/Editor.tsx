@@ -9,14 +9,67 @@ import type { ActType, Article, ChecklistItem, CopilotReply, ProjectDetail } fro
 
 const DEMO_SLUG = "transparenta-preturilor-medicamentelor-compensate";
 
-// Sections required for a complete expunere de motive (presence drives check 11).
-const MOTIVE_REQUIRED = ["problema", "solutie", "impact-bugetar", "efecte"];
-const MOTIVE_LABELS: Record<string, string> = {
-  problema: "Problema",
-  solutie: "Soluția propusă",
-  "impact-bugetar": "Impact bugetar",
-  efecte: "Efecte așteptate",
-};
+// Expunerea de motive, conform Art. 31 din Legea 24/2000 (instrumentul de prezentare
+// și motivare). Secțiunile a–d sunt esențiale (impun check 11); e–g sunt încurajate.
+interface MotiveField {
+  key: string;
+  letter: string;
+  label: string;
+  required: boolean;
+  help: string;
+}
+const MOTIVE_FIELDS: MotiveField[] = [
+  {
+    key: "motiv-emitere",
+    letter: "a",
+    label: "Motivul emiterii actului",
+    required: true,
+    help: "Ce problemă există și de ce e nevoie de reglementare: insuficiențele reglementărilor în vigoare, principiile de bază, schimbările preconizate. Folosește date concrete, statistici, surse.",
+  },
+  {
+    key: "impact-socioeconomic",
+    letter: "b",
+    label: "Impactul socioeconomic",
+    required: true,
+    help: "Efectele asupra mediului economic, de afaceri, social și asupra mediului înconjurător, cu evaluarea costurilor și a beneficiilor.",
+  },
+  {
+    key: "impact-financiar",
+    letter: "c",
+    label: "Impactul financiar asupra bugetului",
+    required: true,
+    help: "Efectele asupra bugetului general consolidat, pe termen scurt (anul curent) și lung (5 ani): cheltuieli și venituri estimate.",
+  },
+  {
+    key: "impact-juridic",
+    letter: "d",
+    label: "Impactul asupra sistemului juridic",
+    required: true,
+    help: "Implicațiile asupra legislației în vigoare și compatibilitatea cu dreptul UE (directive, regulamente). Ce acte se modifică sau se corelează.",
+  },
+  {
+    key: "consultari",
+    letter: "e",
+    label: "Consultări derulate",
+    required: false,
+    help: "Organizațiile și instituțiile consultate la elaborare și recomandările primite.",
+  },
+  {
+    key: "informare-publica",
+    letter: "f",
+    label: "Activități de informare publică",
+    required: false,
+    help: "Cum a fost (sau va fi) informat publicul despre elaborarea și implementarea actului.",
+  },
+  {
+    key: "masuri-implementare",
+    letter: "g",
+    label: "Măsuri de implementare",
+    required: false,
+    help: "Modificările instituționale și funcționale necesare la nivelul administrației publice centrale și locale.",
+  },
+];
+const MOTIVE_REQUIRED = MOTIVE_FIELDS.filter((f) => f.required).map((f) => f.key);
 
 export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const params = useParams();
@@ -946,6 +999,24 @@ function VigoareStep({ vigoareDays, canEdit, onSet }: { vigoareDays: number | nu
 }
 
 // ── Step 7: Expunere de motive ─────────────────────────────────────────────
+const MOTIVE_EXAMPLES: { ref: string; text: string; url: string }[] = [
+  {
+    ref: "Lege privind transparența prețurilor medicamentelor compensate",
+    text: "Motivul emiterii: „Conform unui studiu CNAS din 2024, același medicament compensat variază ca preț cu până la 300% între farmacii în același oraș, iar 62% dintre pacienții cronici nu cunosc prețul de referință. Reglementarea este compatibilă cu Directiva 89/105/CEE privind transparența prețurilor.”",
+    url: "https://legislatie.just.ro/",
+  },
+  {
+    ref: "Expunere de motive — Lege privind registrul comerțului (PL-x 154/2022)",
+    text: "Exemplu real de expunere de motive depusă la Camera Deputaților (PDF).",
+    url: "https://www.cdep.ro/proiecte/2022/100/30/3/em154.pdf",
+  },
+  {
+    ref: "Expunere de motive — modificarea Codului penal (Comisia juridică, 2018)",
+    text: "Alt exemplu real, cu structura completă a motivării (PDF).",
+    url: "https://www.cdep.ro/comisii/suasl_justitie/pdf/2018/rd_0418.pdf",
+  },
+];
+
 function MotivesStep({
   motives,
   canEdit,
@@ -955,38 +1026,50 @@ function MotivesStep({
   canEdit: boolean;
   onSave: (sections: { section: string; body: string }[]) => void | Promise<void>;
 }) {
-  const initial = MOTIVE_REQUIRED.map((s) => ({ section: s, body: motives.find((m) => m.section === s)?.body ?? "" }));
-  const [draft, setDraft] = useState(initial);
+  const build = () => MOTIVE_FIELDS.map((f) => ({ section: f.key, body: motives.find((m) => m.section === f.key)?.body ?? "" }));
+  const [draft, setDraft] = useState(build);
   const [dirty, setDirty] = useState(false);
   useEffect(() => {
-    setDraft(MOTIVE_REQUIRED.map((s) => ({ section: s, body: motives.find((m) => m.section === s)?.body ?? "" })));
+    setDraft(build());
     setDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [motives]);
 
   const setBody = (section: string, body: string) => {
     setDraft((d) => d.map((x) => (x.section === section ? { ...x, body } : x)));
     setDirty(true);
   };
-  const filled = draft.filter((d) => d.body.trim()).length;
+  const bodyOf = (key: string) => draft.find((d) => d.section === key)?.body ?? "";
+  const requiredFilled = MOTIVE_REQUIRED.filter((k) => bodyOf(k).trim()).length;
+  const complete = requiredFilled === MOTIVE_REQUIRED.length;
+
   return (
     <div>
       <StageHeader
         step={7}
         label="Expunere de motive"
         title="De ce e nevoie de această lege?"
-        sub="Expunerea de motive explică problema, soluția și efectele. Nu e text de lege — e argumentul tău pentru cei care o vor citi și vota."
+        sub="Document obligatoriu care însoțește proiectul. Structura urmează Art. 31 din Legea nr. 24/2000 — instrumentul de prezentare și motivare. Nu e text de lege, ci argumentul tău pentru cei care o vor citi și vota."
       />
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {draft.map((d) => (
-          <div key={d.section}>
-            <label style={{ display: "block", fontFamily: "var(--sans)", fontSize: 12, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--amber)", marginBottom: 6 }}>
-              {MOTIVE_LABELS[d.section]}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {MOTIVE_FIELDS.map((f) => (
+          <div key={f.key}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+              <span style={{ fontFamily: "var(--sans)", fontSize: 12, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--amber)" }}>
+                {f.letter}) {f.label}
+              </span>
+              {f.required ? (
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--alert)", background: "var(--alert-bg)", border: "1px solid var(--alert-line)", borderRadius: 99, padding: "1px 7px" }}>obligatoriu</span>
+              ) : (
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", background: "var(--paper-2)", border: "1px solid var(--border-2)", borderRadius: 99, padding: "1px 7px" }}>opțional</span>
+              )}
             </label>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.45, marginBottom: 7 }}>{f.help}</div>
             <textarea
-              value={d.body}
+              value={bodyOf(f.key)}
               readOnly={!canEdit}
-              placeholder={`Scrie ${MOTIVE_LABELS[d.section].toLowerCase()}…`}
-              onChange={(e) => setBody(d.section, e.target.value)}
+              placeholder={`Scrie ${f.label.toLowerCase()}…`}
+              onChange={(e) => setBody(f.key, e.target.value)}
               onBlur={() => canEdit && dirty && onSave(draft)}
               rows={3}
               style={{ width: "100%", border: "1.5px solid var(--border-2)", borderRadius: "var(--r)", padding: "11px 13px", fontFamily: "var(--serif)", fontSize: 15, lineHeight: 1.6, color: "var(--ink)", resize: "vertical", outline: "none", background: canEdit ? "var(--surface)" : "var(--surface-2)" }}
@@ -994,21 +1077,62 @@ function MotivesStep({
           </div>
         ))}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
         {canEdit && (
           <Btn variant="primary" size="md" icon="save" disabled={!dirty} onClick={() => onSave(draft)}>
             Salvează expunerea
           </Btn>
         )}
-        <span style={{ fontSize: 13, color: "var(--muted)" }}>{filled}/{MOTIVE_REQUIRED.length} secțiuni completate</span>
+        <span style={{ fontSize: 13, color: "var(--muted)" }}>{requiredFilled}/{MOTIVE_REQUIRED.length} secțiuni obligatorii completate</span>
       </div>
       <div style={{ marginTop: 12 }}>
         <ValidatorCard
           variant="soft"
-          state={filled === MOTIVE_REQUIRED.length ? "ok" : "warn"}
-          title={filled === MOTIVE_REQUIRED.length ? "Expunere de motive completă" : "Expunerea de motive e incompletă"}
-          text={filled === MOTIVE_REQUIRED.length ? "Toate secțiunile sunt prezente." : "Completează toate cele patru secțiuni, inclusiv impactul bugetar."}
+          state={complete ? "ok" : "warn"}
+          title={complete ? "Expunere de motive completă" : "Expunerea de motive e incompletă"}
+          text={complete ? "Secțiunile obligatorii (a–d) sunt prezente." : "Completează secțiunile obligatorii (a–d), inclusiv impactul financiar asupra bugetului."}
         />
+      </div>
+
+      {/* Exemple din legi reale */}
+      <div style={{ marginTop: 20, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: "16px 18px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <Icon name="book" size={16} style={{ color: "var(--amber)" }} />
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink)" }}>Exemple din legi reale</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {MOTIVE_EXAMPLES.map((ex) => (
+            <div key={ex.url} style={{ borderLeft: "2px solid var(--amber)", paddingLeft: 12 }}>
+              <a href={ex.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 700, color: "var(--blue)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                {ex.ref} <Icon name="link" size={12} />
+              </a>
+              <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, marginTop: 4 }}>{ex.text}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Sumar Art. 31 din Legea 24/2000 */}
+      <div style={{ marginTop: 16, background: "var(--blue-soft)", border: "1px solid #d7e3f1", borderRadius: "var(--r-lg)", padding: "16px 18px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <Icon name="scale" size={16} style={{ color: "var(--navy)" }} />
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--navy)" }}>Ce cere Art. 31 din Legea nr. 24/2000</span>
+        </div>
+        <p style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.6, margin: "0 0 8px" }}>
+          Instrumentul de prezentare și motivare cuprinde o evaluare a impactului, cu următoarele secțiuni:
+        </p>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.7 }}>
+          {MOTIVE_FIELDS.map((f) => (
+            <li key={f.key}>
+              <b>{f.letter})</b> {f.label.toLowerCase()}
+            </li>
+          ))}
+        </ul>
+        <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.55, margin: "8px 0 0" }}>
+          Forma finală cuprinde și referiri la <b>avizul Consiliului Legislativ</b> și la alte avize obligatorii (art. 31 alin. 3).
+          Expunerea se semnează de inițiatori (art. 34).
+        </p>
       </div>
     </div>
   );

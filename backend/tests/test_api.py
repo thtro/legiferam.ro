@@ -143,22 +143,22 @@ def test_motives_complete_flips_check_eleven(seeded_client):
     slug = seeded_client.post(
         "/projects", json={"title": "Lege privind pistele pentru biciclete", "act_type": "lege-ordinara"}
     ).json()["slug"]
-    # partial motives -> check 11 warn
+    # partial motives (Art. 31 a–b) -> check 11 warn
     seeded_client.put(
         f"/projects/{slug}/motives",
-        json={"sections": [{"section": "problema", "body": "X"}, {"section": "solutie", "body": "Y"}]},
+        json={"sections": [{"section": "motiv-emitere", "body": "X"}, {"section": "impact-socioeconomic", "body": "Y"}]},
     )
     ck = {c["check_id"]: c["state"] for c in seeded_client.get(f"/projects/{slug}/checklist").json()}
     assert ck[11] == "warn"
-    # all four sections -> check 11 ok
+    # all four core sections (Art. 31 a–d) -> check 11 ok
     d = seeded_client.put(
         f"/projects/{slug}/motives",
         json={
             "sections": [
-                {"section": "problema", "body": "X"},
-                {"section": "solutie", "body": "Y"},
-                {"section": "impact-bugetar", "body": "Z"},
-                {"section": "efecte", "body": "W"},
+                {"section": "motiv-emitere", "body": "X"},
+                {"section": "impact-socioeconomic", "body": "Y"},
+                {"section": "impact-financiar", "body": "Z"},
+                {"section": "impact-juridic", "body": "W"},
             ]
         },
     ).json()
