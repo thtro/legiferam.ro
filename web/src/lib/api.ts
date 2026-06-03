@@ -49,7 +49,7 @@ export const api = {
     req<ProjectDetail>("/projects", { method: "POST", body: JSON.stringify(body) }),
   patchProject: (
     slugOrId: string | number,
-    body: { title?: string; status?: string; domain?: string; vigoare_days?: number },
+    body: { title?: string; act_type?: string; status?: string; domain?: string; vigoare_days?: number },
   ) => req<ProjectDetail>(`/projects/${slugOrId}`, { method: "PATCH", body: JSON.stringify(body) }),
   updateArticle: (
     slugOrId: string | number,

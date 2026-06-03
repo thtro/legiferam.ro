@@ -1,5 +1,12 @@
 """Test fixtures: an in-memory SQLite DB + seeded TestClient, so the API suite runs
 without Postgres. (Production uses Postgres via docker-compose.)"""
+import os
+
+# Force deterministic AI behaviour for tests regardless of the runtime env: scripted
+# co-pilot, no real OpenRouter calls. Must run BEFORE app.config loads its settings.
+os.environ["AI_DEMO_SCRIPTED"] = "true"
+os.environ["OPENROUTER_API_KEY"] = ""
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

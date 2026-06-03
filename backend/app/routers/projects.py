@@ -226,6 +226,8 @@ def update_project(
     _guard_editable(project)
     if payload.title is not None:
         project.title = payload.title.strip() or project.title
+    if payload.act_type is not None:
+        project.act_type = payload.act_type
     if payload.status is not None:
         project.status = payload.status
     if payload.domain is not None:

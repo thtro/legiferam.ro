@@ -139,6 +139,15 @@ def test_vigoare_patch_flips_check_eight(seeded_client):
     assert {c["check_id"]: c["state"] for c in d["checklist"]}[8] == "ok"
 
 
+def test_patch_act_type(seeded_client):
+    seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
+    slug = seeded_client.post(
+        "/projects", json={"title": "Lege privind apele minerale", "act_type": "lege-ordinara"}
+    ).json()["slug"]
+    d = seeded_client.patch(f"/projects/{slug}", json={"act_type": "lege-organica"}).json()
+    assert d["act_type"] == "lege-organica"
+
+
 def test_created_project_appears_in_discovery(seeded_client):
     seeded_client.post("/auth/login", json={"username": "demo", "password": "demo"})
     seeded_client.post("/projects", json={"title": "Lege privind apa potabilă rurală", "act_type": "lege-ordinara"})

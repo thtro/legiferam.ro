@@ -131,6 +131,9 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const saveMotives = async (sections: { section: string; body: string }[]) => {
     if (canEdit) await api.replaceMotives(ps, sections).then(() => reload(ps));
   };
+  const setActTypeProj = async (t: ActType) => {
+    if (canEdit) await api.patchProject(ps, { act_type: t }).then(() => reload(ps));
+  };
 
   return (
     <EditorShell
@@ -175,6 +178,8 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
         articles={articles}
         canEdit={canEdit}
         checklist={checklist}
+        actType={project.act_type}
+        onSetActType={setActTypeProj}
         title={title}
         onSaveTitle={(v) => {
           if (canEdit && v.trim() && v !== project.title) api.patchProject(ps, { title: v }).then(() => reload(ps));
@@ -402,6 +407,8 @@ function CentreStage({
   articles,
   canEdit,
   checklist,
+  actType,
+  onSetActType,
   title,
   onSaveTitle,
   vigoareDays,
@@ -416,6 +423,8 @@ function CentreStage({
   articles: Article[];
   canEdit: boolean;
   checklist: ChecklistItem[];
+  actType: ActType;
+  onSetActType: (t: ActType) => void | Promise<void>;
   title: string;
   onSaveTitle: (v: string) => void;
   vigoareDays: number | null;
@@ -426,6 +435,7 @@ function CentreStage({
   onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
   onDeleteArticle: (id: number) => void | Promise<void>;
 }) {
+  if (step === 1) return <TipActStep actType={actType} canEdit={canEdit} onSet={onSetActType} />;
   if (step === 2) return <TitleStep title={title} canEdit={canEdit} onSave={onSaveTitle} />;
   if (step === 5) return <SanctionsStep articles={articles} canEdit={canEdit} onAddArticle={onAddArticle} />;
   if (step === 6) return <VigoareStep vigoareDays={vigoareDays} canEdit={canEdit} onSet={onSetVigoare} />;
@@ -497,6 +507,50 @@ function CentreStage({
   return (
     <div>
       <StageHeader step={step} label="Pas" title="Pas în lucru" sub="Folosește co-pilotul din dreapta pentru ajutor la redactare." />
+    </div>
+  );
+}
+
+// ── Step 1: Tip act ────────────────────────────────────────────────────────
+function TipActStep({ actType, canEdit, onSet }: { actType: ActType; canEdit: boolean; onSet: (t: ActType) => void | Promise<void> }) {
+  const cards: ActType[] = ["lege-ordinara", "lege-organica", "oug", "hg"];
+  return (
+    <div>
+      <StageHeader
+        step={1}
+        label="Tip act"
+        title="Ce fel de act normativ scrii?"
+        sub="Tipul actului stabilește regulile de adoptare. Pentru inițiative cetățenești, cele mai potrivite sunt legea ordinară și legea organică."
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 13 }}>
+        {cards.map((id) => {
+          const a = ACT_TYPES[id];
+          const disabled = !!a.disabled;
+          const active = actType === id;
+          return (
+            <button
+              key={id}
+              disabled={disabled || !canEdit}
+              onClick={() => onSet(id)}
+              style={{ textAlign: "left", background: active ? "var(--blue-soft)" : "var(--surface)", border: "1.5px solid", borderColor: active ? "var(--blue)" : "var(--border)", borderRadius: "var(--r-lg)", padding: 18, cursor: disabled || !canEdit ? "default" : "pointer", opacity: disabled ? 0.62 : 1, boxShadow: active ? "var(--sh-2)" : "var(--sh-1)" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
+                <span style={{ fontSize: 16.5, fontWeight: 800, color: "var(--navy-deep)" }}>{a.label}</span>
+                <span style={{ width: 22, height: 22, borderRadius: 99, border: "2px solid", borderColor: active ? "var(--blue)" : "var(--border-2)", display: "grid", placeItems: "center", background: active ? "var(--blue)" : "transparent" }}>
+                  {active && <Icon name="check" size={12} stroke={3} style={{ color: "#fff" }} />}
+                </span>
+              </div>
+              <p style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.5, margin: "0 0 10px" }}>{a.desc}</p>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: disabled ? "var(--alert)" : "var(--ok)" }}>
+                <Icon name={disabled ? "info" : "user"} size={14} /> {a.who}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <ValidatorCard variant="soft" state="ok" title="Tip de act selectat" text={`${ACT_TYPES[actType].label} — potrivit pentru o inițiativă cetățenească.`} />
+      </div>
     </div>
   );
 }

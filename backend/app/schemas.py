@@ -54,6 +54,7 @@ class ProjectCreate(BaseModel):
 
 class ProjectPatch(BaseModel):
     title: str | None = None
+    act_type: str | None = None
     status: str | None = None
     domain: str | None = None
     vigoare_days: int | None = None
