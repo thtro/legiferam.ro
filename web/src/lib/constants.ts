@@ -45,15 +45,13 @@ export interface WizardStep {
   label: string;
 }
 
+// Titlul, definițiile, articolele și sancțiunile sunt toate „textul legii" — un singur pas.
 export const WIZARD_STEPS: WizardStep[] = [
   { id: 1, label: "Tip act" },
-  { id: 2, label: "Titlu" },
-  { id: 3, label: "Definiții" },
-  { id: 4, label: "Articole" },
-  { id: 5, label: "Sancțiuni" },
-  { id: 6, label: "Intrare în vigoare" },
-  { id: 7, label: "Expunere de motive" },
-  { id: 8, label: "Verificare finală" },
+  { id: 2, label: "Textul legii" },
+  { id: 3, label: "Intrare în vigoare" },
+  { id: 4, label: "Expunere de motive" },
+  { id: 5, label: "Verificare finală" },
 ];
 
 export const AI_QUICK_ACTIONS: { icon: string; label: string; action: string }[] = [

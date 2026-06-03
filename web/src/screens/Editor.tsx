@@ -81,7 +81,7 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [title, setTitle] = useState("");
-  const [activeStep, setActiveStep] = useState(4);
+  const [activeStep, setActiveStep] = useState(2);
   const [activeOutline, setActiveOutline] = useState("art3");
   const [showChecks, setShowChecks] = useState(false);
   const [newActType, setNewActType] = useState<ActType | null>(null);
@@ -121,17 +121,16 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   }, [articles, project]);
 
   // Wizard step states from the checklist + structure.
+  // 1 Tip act · 2 Textul legii (titlu+definiții+articole+sancțiuni) · 3 Vigoare ·
+  // 4 Expunere de motive · 5 Verificare finală.
   const stepState = (id: number): "done" | "current" | "todo" | "warn" => {
     const motiveSections = new Set((project?.motives ?? []).map((m) => m.section));
     const motiveComplete = MOTIVE_REQUIRED.every((s) => motiveSections.has(s));
     if (id === activeStep) return "current";
     if (id === 1) return newActType || project ? "done" : "todo";
-    if (id === 2) return title ? "done" : "todo";
-    if (id === 3) return articles.some((a) => /defini/i.test(a.title)) ? "done" : "todo";
-    if (id === 4) return articles.length ? "done" : "todo";
-    if (id === 5) return articles.some((a) => /sanc[țt]i/i.test(a.title)) ? "done" : "todo";
-    if (id === 6) return project?.vigoare_days != null ? "done" : "todo";
-    if (id === 7) return motiveSections.size === 0 ? "todo" : motiveComplete ? "done" : "warn";
+    if (id === 2) return title && articles.length ? "done" : "todo";
+    if (id === 3) return project?.vigoare_days != null ? "done" : "todo";
+    if (id === 4) return motiveSections.size === 0 ? "todo" : motiveComplete ? "done" : "warn";
     return "todo";
   };
 
@@ -629,64 +628,26 @@ function CentreStage({
   onDeleteArticle: (id: number) => void | Promise<void>;
 }) {
   if (step === 1) return <TipActStep actType={actType} canEdit={canEdit} onSet={onSetActType} />;
-  if (step === 2) return <TitleStep title={title} canEdit={canEdit} onSave={onSaveTitle} />;
-  if (step === 3)
+  if (step === 2)
     return (
-      <DefinitionsStep
+      <LawTextStep
+        title={title}
+        onSaveTitle={onSaveTitle}
         articles={articles}
         canEdit={canEdit}
-        onAddArticle={onAddArticle}
         onSaveArticle={onSaveArticle}
+        onAddArticle={onAddArticle}
         onDeleteArticle={onDeleteArticle}
+        onRunSemantic={onRunSemantic}
+        semanticBusy={semanticBusy}
       />
     );
-  if (step === 5) return <SanctionsStep articles={articles} canEdit={canEdit} onAddArticle={onAddArticle} />;
-  if (step === 6) return <VigoareStep vigoareDays={vigoareDays} canEdit={canEdit} onSet={onSetVigoare} />;
-  if (step === 7) return <MotivesStep motives={motives} canEdit={canEdit} onSave={onSaveMotives} projectId={projectId} />;
-
-  if (step === 4) {
+  if (step === 3) return <VigoareStep vigoareDays={vigoareDays} canEdit={canEdit} onSet={onSetVigoare} />;
+  if (step === 4) return <MotivesStep motives={motives} canEdit={canEdit} onSave={onSaveMotives} projectId={projectId} />;
+  if (step === 5) {
     return (
       <div>
-        <StageHeader
-          step={4}
-          label="Articole"
-          title="Scrie articolele legii"
-          sub="Fiecare articol exprimă o singură idee sau obligație. Numerotarea alineatelor se face automat. Te anunțăm dacă un articol pare să spună prea multe deodată."
-        />
-        {articles.length === 0 && (
-          <div style={{ background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r-lg)", padding: "30px 24px", textAlign: "center", color: "var(--muted)", marginBottom: 14 }}>
-            Încă nu ai niciun articol. Adaugă primul articol sau cere co-pilotului „Transformă ideea mea în articol conform”.
-          </div>
-        )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {articles.map((art) => (
-            <ArticleCard
-              key={art.id}
-              art={art}
-              canEdit={canEdit}
-              onSave={onSaveArticle}
-              onDelete={() => onDeleteArticle(art.id)}
-              onVerify={onRunSemantic}
-              verifyBusy={semanticBusy}
-            />
-          ))}
-        </div>
-        <button
-          onClick={() => onAddArticle({ title: "Articol nou", single_idea: true, alineate: [""] })}
-          disabled={!canEdit}
-          title={canEdit ? "" : "Doar inițiatorii pot edita acest proiect"}
-          style={{ marginTop: 14, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r)", padding: "14px", color: "var(--blue)", fontWeight: 600, fontSize: 14, fontFamily: "var(--sans)", cursor: canEdit ? "pointer" : "not-allowed", opacity: canEdit ? 1 : 0.6 }}
-        >
-          <Icon name="plus" size={17} /> Adaugă articol
-        </button>
-      </div>
-    );
-  }
-
-  if (step === 8) {
-    return (
-      <div>
-        <StageHeader step={8} label="Verificare finală" title="Aproape gata de depunere" sub="Trecem în revistă toate verificările de conformitate." />
+        <StageHeader step={5} label="Verificare finală" title="Aproape gata de depunere" sub="Trecem în revistă toate verificările de conformitate." />
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)", padding: 22 }}>
           <ComplianceBar checklist={checklist} expandable={false} />
           {canEdit && checklist.some((c) => c.kind !== "determinist" && c.state === "todo") && (
@@ -782,172 +743,141 @@ function TipActStep({ actType, canEdit, onSet }: { actType: ActType; canEdit: bo
   );
 }
 
-// ── Step 2: Titlu ──────────────────────────────────────────────────────────
-function TitleStep({ title, canEdit, onSave }: { title: string; canEdit: boolean; onSave: (v: string) => void }) {
+// ── Step 2: Textul legii (titlu + definiții + articole + sancțiuni) ─────────
+function LawTextStep({
+  title,
+  onSaveTitle,
+  articles,
+  canEdit,
+  onSaveArticle,
+  onAddArticle,
+  onDeleteArticle,
+  onRunSemantic,
+  semanticBusy,
+}: {
+  title: string;
+  onSaveTitle: (v: string) => void;
+  articles: Article[];
+  canEdit: boolean;
+  onSaveArticle: (a: Article) => void | Promise<void>;
+  onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
+  onDeleteArticle: (id: number) => void | Promise<void>;
+  onRunSemantic: () => void | Promise<void>;
+  semanticBusy: boolean;
+}) {
   const [val, setVal] = useState(title);
   useEffect(() => setVal(title), [title]);
   const stripped = val.replace(/^Lege privind\s*/i, "");
-  const check = title.length > 25;
+  const hasDefs = articles.some((a) => /defini/i.test(a.title));
+  const hasSanctions = articles.some((a) => /sanc[țt]i|amend|contraven/i.test(a.title));
+
+  const addBtn = (label: string, onClick: () => void, dashed = false) => (
+    <button
+      onClick={onClick}
+      disabled={!canEdit}
+      title={canEdit ? "" : "Doar inițiatorii pot edita acest proiect"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 7,
+        background: "var(--surface)",
+        border: dashed ? "1.5px dashed var(--border-2)" : "1px solid var(--border-2)",
+        borderRadius: "var(--r)",
+        padding: "10px 14px",
+        color: "var(--blue)",
+        fontWeight: 600,
+        fontSize: 13.5,
+        fontFamily: "var(--sans)",
+        cursor: canEdit ? "pointer" : "not-allowed",
+        opacity: canEdit ? 1 : 0.6,
+      }}
+    >
+      <Icon name="plus" size={16} /> {label}
+    </button>
+  );
+
   return (
     <div>
       <StageHeader
         step={2}
-        label="Titlu"
-        title="Cum se va numi legea ta?"
-        sub="Titlul trebuie să spună exact ce reglementează legea. Un titlu precis ajută oamenii — și instituțiile — să înțeleagă din prima despre ce e vorba."
+        label="Textul legii"
+        title="Scrie textul legii"
+        sub="Titlul, definițiile, articolele și sancțiunile formează împreună textul legii. Fiecare articol exprimă o singură idee; numerotarea alineatelor se face automat."
       />
-      <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "var(--muted)", marginBottom: 8, letterSpacing: ".02em" }}>TITLUL PROIECTULUI DE LEGE</label>
+
+      {/* Titlul */}
+      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--muted)", marginBottom: 7, letterSpacing: ".03em" }}>TITLUL PROIECTULUI DE LEGE</label>
       <div style={{ display: "flex", alignItems: "center", background: "var(--surface)", border: "1.5px solid var(--border-2)", borderRadius: "var(--r)", padding: "4px 4px 4px 16px", boxShadow: "var(--sh-1)" }}>
-        <span style={{ fontFamily: "var(--serif)", fontSize: 19, color: "var(--muted)", whiteSpace: "nowrap" }}>Lege privind</span>
+        <span style={{ fontFamily: "var(--serif)", fontSize: 18, color: "var(--muted)", whiteSpace: "nowrap" }}>Lege privind</span>
         <input
           value={stripped}
           readOnly={!canEdit}
           onChange={(e) => setVal(`Lege privind ${e.target.value}`)}
-          onBlur={() => canEdit && onSave(val)}
+          onBlur={() => canEdit && onSaveTitle(val)}
           placeholder="transparența prețurilor medicamentelor compensate"
-          style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: "var(--serif)", fontSize: 19, color: "var(--navy-deep)", padding: "12px 8px", fontWeight: 600 }}
+          style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: "var(--serif)", fontSize: 18, color: "var(--navy-deep)", padding: "12px 8px", fontWeight: 600 }}
         />
       </div>
-      <div style={{ marginTop: 12 }}>
+
+      {/* Articolele */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "24px 0 12px" }}>
+        <Eyebrow>Articolele legii</Eyebrow>
+        <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
+      </div>
+      {articles.length === 0 ? (
+        <div style={{ background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r-lg)", padding: "28px 24px", textAlign: "center", color: "var(--muted)", lineHeight: 1.55 }}>
+          Încă nu ai niciun articol. Începe cu un articol de obiect (Art. 1), apoi definiții, obligații și sancțiuni — sau cere co-pilotului „Transformă ideea mea în articol conform”.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {articles.map((art) => (
+            <ArticleCard
+              key={art.id}
+              art={art}
+              canEdit={canEdit}
+              onSave={onSaveArticle}
+              onDelete={() => onDeleteArticle(art.id)}
+              onVerify={onRunSemantic}
+              verifyBusy={semanticBusy}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Adăugare: generic + șabloane definiții/sancțiuni */}
+      <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+        {addBtn("Adaugă articol", () => onAddArticle({ title: "Articol nou", single_idea: true, alineate: [""] }), true)}
+        {!hasDefs &&
+          addBtn("Articol de definiții", () =>
+            onAddArticle({
+              title: "Definiții",
+              single_idea: true,
+              alineate: ["În înțelesul prezentei legi, termenii de mai jos au următoarea semnificație:", "___ — definiția primului termen;"],
+            }),
+          )}
+        {!hasSanctions &&
+          addBtn("Articol de sancțiuni", () =>
+            onAddArticle({
+              title: "Sancțiuni",
+              single_idea: true,
+              alineate: ["Nerespectarea obligațiilor prevăzute de prezenta lege constituie contravenție și se sancționează cu amendă de la ___ la ___ lei."],
+            }),
+          )}
+      </div>
+
+      <div style={{ marginTop: 14 }}>
         <ValidatorCard
           variant="soft"
-          state={check ? "ok" : "warn"}
-          title={check ? "Titlu precis și complet" : "Titlul pare prea scurt sau vag"}
-          text={check ? "Indică obiectul reglementării. Regula de formă e îndeplinită." : "Spune clar ce, pentru cine și în ce domeniu reglementează legea."}
+          state={hasDefs && hasSanctions ? "ok" : "warn"}
+          title={hasDefs && hasSanctions ? "Structura de bază e acoperită" : "Verifică structura legii"}
+          text={
+            hasDefs && hasSanctions
+              ? "Ai un articol de definiții și unul de sancțiuni. Asigură-te că fiecare obligație are o sancțiune proporțională."
+              : `Recomandat: ${!hasDefs ? "un articol de definiții" : ""}${!hasDefs && !hasSanctions ? " și " : ""}${!hasSanctions ? "un articol de sancțiuni" : ""}. Orice obligație are nevoie de o sancțiune ca să poată fi aplicată.`
+          }
         />
       </div>
-    </div>
-  );
-}
-
-// ── Step 3: Definiții ──────────────────────────────────────────────────────
-function DefinitionsStep({
-  articles,
-  canEdit,
-  onAddArticle,
-  onSaveArticle,
-  onDeleteArticle,
-}: {
-  articles: Article[];
-  canEdit: boolean;
-  onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
-  onSaveArticle: (a: Article) => void | Promise<void>;
-  onDeleteArticle: (id: number) => void | Promise<void>;
-}) {
-  const defs = articles.filter((a) => /defini/i.test(a.title));
-  return (
-    <div>
-      <StageHeader
-        step={3}
-        label="Definiții"
-        title="Definește termenii cheie"
-        sub="Termenii tehnici sau ambigui se definesc explicit, de regulă într-un articol dedicat (ex. Art. 2). Definițiile clare evită interpretările greșite — un singur articol, cu enumerare: a), b), c)."
-      />
-      {defs.length === 0 ? (
-        <>
-          <div style={{ background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r-lg)", padding: "30px 24px", textAlign: "center" }}>
-            <span style={{ width: 46, height: 46, borderRadius: 12, background: "var(--paper-2)", color: "var(--muted)", display: "inline-grid", placeItems: "center", marginBottom: 12 }}>
-              <Icon name="book" size={22} />
-            </span>
-            <div style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)" }}>Încă nu ai un articol de definiții</div>
-            <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 440, marginInline: "auto", lineHeight: 1.55 }}>
-              Adaugă un articol care definește termenii cheie din lege, sau cere-i co-pilotului „Explică-mi regula asta simplu".
-            </div>
-            <div style={{ marginTop: 16 }}>
-              <Btn
-                variant="primary"
-                size="md"
-                icon="plus"
-                disabled={!canEdit}
-                onClick={() =>
-                  onAddArticle({
-                    title: "Definiții",
-                    single_idea: true,
-                    alineate: [
-                      "În înțelesul prezentei legi, termenii de mai jos au următoarea semnificație:",
-                      "___ — definiția primului termen;",
-                    ],
-                  })
-                }
-              >
-                Adaugă articol de definiții
-              </Btn>
-            </div>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <ValidatorCard variant="soft" state="warn" title="Termenii cheie nu sunt încă definiți" text="Fără definiții, termenii pot fi interpretați diferit. Adaugă un articol dedicat." />
-          </div>
-        </>
-      ) : (
-        <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {defs.map((art) => (
-              <ArticleCard key={art.id} art={art} canEdit={canEdit} onSave={onSaveArticle} onDelete={() => onDeleteArticle(art.id)} />
-            ))}
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <ValidatorCard variant="soft" state="ok" title="Ai un articol de definiții" text="Termenii cheie sunt definiți explicit. Verifică să acoperi toți termenii ambigui din lege." />
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ── Step 5: Sancțiuni ──────────────────────────────────────────────────────
-function SanctionsStep({
-  articles,
-  canEdit,
-  onAddArticle,
-}: {
-  articles: Article[];
-  canEdit: boolean;
-  onAddArticle: (a: { title: string; single_idea: boolean; alineate: string[] }) => void | Promise<void>;
-}) {
-  const hasSanctions = articles.some((a) => /sanc[țt]i|amend|contraven/i.test(a.title));
-  return (
-    <div>
-      <StageHeader
-        step={5}
-        label="Sancțiuni"
-        title="Ce se întâmplă dacă regula nu e respectată?"
-        sub="Orice obligație din lege are nevoie de o sancțiune, altfel rămâne fără efect. Adaugă un articol de sancțiuni proporțional cu fapta."
-      />
-      {hasSanctions ? (
-        <ValidatorCard variant="soft" state="ok" title="Ai un articol de sancțiuni" text="Obligațiile din lege au o consecință. Verifică să fie proporțională cu fapta." />
-      ) : (
-        <>
-          <div style={{ background: "var(--surface)", border: "1.5px dashed var(--border-2)", borderRadius: "var(--r-lg)", padding: "30px 24px", textAlign: "center" }}>
-            <span style={{ width: 46, height: 46, borderRadius: 12, background: "var(--paper-2)", color: "var(--muted)", display: "inline-grid", placeItems: "center", marginBottom: 12 }}>
-              <Icon name="scale" size={22} />
-            </span>
-            <div style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)" }}>Încă nu ai un articol de sancțiuni</div>
-            <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 420, marginInline: "auto", lineHeight: 1.55 }}>
-              Obligațiile introduse nu au deocamdată o consecință. Adaugă un articol de sancțiuni sau cere-i co-pilotului unul proporțional.
-            </div>
-            <div style={{ marginTop: 16 }}>
-              <Btn
-                variant="primary"
-                size="md"
-                icon="plus"
-                disabled={!canEdit}
-                onClick={() =>
-                  onAddArticle({
-                    title: "Sancțiuni",
-                    single_idea: true,
-                    alineate: ["Nerespectarea obligațiilor prevăzute de prezenta lege constituie contravenție și se sancționează cu amendă de la ___ la ___ lei."],
-                  })
-                }
-              >
-                Adaugă articol de sancțiuni
-              </Btn>
-            </div>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <ValidatorCard variant="soft" state="alert" title="Lipsește sancțiunea pentru o obligație" text="Fără sancțiune, regula nu poate fi aplicată în practică." />
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -1527,7 +1457,15 @@ function Copilot({ projectId, onInsert }: { projectId?: number; onInsert: (art: 
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [insertedIdx, setInsertedIdx] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("legiferam_copilot_collapsed") === "1");
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      localStorage.setItem("legiferam_copilot_collapsed", v ? "0" : "1");
+      return !v;
+    });
+  };
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -1552,6 +1490,22 @@ function Copilot({ projectId, onInsert }: { projectId?: number; onInsert: (art: 
     }
   };
 
+  if (collapsed) {
+    return (
+      <aside style={{ width: 52, flex: "none", borderLeft: "1px solid var(--border)", background: "var(--surface-2)", display: "flex", flexDirection: "column", alignItems: "center", height: "100%", paddingTop: 14, gap: 14 }}>
+        <button onClick={toggleCollapsed} title="Deschide asistentul" style={{ width: 36, height: 36, borderRadius: 9, background: "var(--navy)", color: "var(--amber)", border: "none", display: "grid", placeItems: "center", cursor: "pointer" }}>
+          <Icon name="spark" size={19} />
+        </button>
+        <button onClick={toggleCollapsed} title="Deschide asistentul" style={{ ...iconBtn, color: "var(--muted)" }}>
+          <Icon name="chevron" size={16} style={{ transform: "rotate(180deg)" }} />
+        </button>
+        <div style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 12, fontWeight: 700, color: "var(--muted)", letterSpacing: ".04em", marginTop: 4 }}>
+          Asistent AI
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside style={{ width: 372, flex: "none", borderLeft: "1px solid var(--border)", background: "var(--surface-2)", display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", background: "var(--surface)", display: "flex", alignItems: "center", gap: 11 }}>
@@ -1565,8 +1519,8 @@ function Copilot({ projectId, onInsert }: { projectId?: number; onInsert: (art: 
             {aiStatus?.scripted ? "Mod scriptat (DEMO)" : "Te ajută cu redactarea"}
           </div>
         </div>
-        <button style={iconBtn}>
-          <Icon name="sliders" size={17} />
+        <button style={iconBtn} title="Restrânge asistentul" onClick={toggleCollapsed}>
+          <Icon name="chevron" size={17} />
         </button>
       </div>
 
