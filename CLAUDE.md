@@ -58,6 +58,8 @@ web/
 - Validator: verificările deterministe rulează instant (server + optimist client); cele semantice prin OpenRouter, cu debounce + cache per versiune.
 - DEMO: citește seed-ul (`is_demo=true`), fără login; co-pilot scriptat când `AI_DEMO_SCRIPTED=true`.
 - Commit-uri convenționale (`feat:`, `fix:`, `chore:`).
+- **Ține [README.md](README.md) la zi**: după orice funcționalitate nouă sau schimbare, actualizează secțiunea relevantă din README (și numărul de teste), în același commit. README e ghidul de referință pentru orice AI/dezvoltator.
+- După o modificare de **backend** în dev, rulează `docker compose restart api` (reload-ul uvicorn nu prinde mereu editările prin bind-mount-ul OrbStack).
 
 ## Deployment
 Vezi [deploy/README.md](deploy/README.md). NU face deployment și NU atinge DB-ul NPM fără confirmare explicită (vezi §10 din brief).
