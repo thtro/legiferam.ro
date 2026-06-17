@@ -1,5 +1,6 @@
 """Auth routes: demo/demo login, logout, current user."""
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import COOKIE_NAME, authenticate_local, create_token, get_optional_user, register_user
@@ -42,6 +43,18 @@ def login(payload: LoginIn, response: Response, db: Session = Depends(get_db)):
     user = authenticate_local(db, payload.username, payload.password)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email/utilizator sau parolă greșite.")
+    _set_session_cookie(response, user)
+    return user
+
+
+@router.post("/demo-login", response_model=UserOut)
+def demo_login(role: str, response: Response, db: Session = Depends(get_db)):
+    """One-click demo sign-in. role=user → the generic explorer account;
+    role=coauthor → the showcase-law co-author (lands in the editor)."""
+    username = settings.demo_coauthor_user if role == "coauthor" else settings.demo_user
+    user = db.scalar(select(User).where(User.username == username))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cont demo indisponibil. Rulează seed-ul.")
     _set_session_cookie(response, user)
     return user
 

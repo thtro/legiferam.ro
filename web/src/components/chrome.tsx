@@ -73,7 +73,7 @@ export function Brand({ onClick }: { onClick?: () => void }) {
 
 export function TopNav({ active }: { active?: "landing" | "project" }) {
   const navigate = useNavigate();
-  const { user, demoMode, setDemoMode } = useApp();
+  const { user } = useApp();
   const [search, setSearch] = useState("");
   const links = [
     { id: "landing", label: "Explorează", to: "/" },
@@ -140,18 +140,6 @@ export function TopNav({ active }: { active?: "landing" | "project" }) {
             style={{ border: "none", outline: "none", background: "transparent", fontSize: 13, color: "var(--ink)", width: "100%", fontFamily: "var(--sans)" }}
           />
         </form>
-        {/* "Mod DEMO" sits next to "Începe un proiect" (brief §5). */}
-        <Btn
-          variant={demoMode ? "accent" : "soft"}
-          size="sm"
-          icon="eye"
-          onClick={() => {
-            setDemoMode(!demoMode);
-            navigate("/");
-          }}
-        >
-          {demoMode ? "Mod DEMO activ" : "Mod DEMO"}
-        </Btn>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => navigate("/editor-nou")}>
           Începe un proiect
         </Btn>
@@ -188,31 +176,3 @@ export function PublicBanner() {
   );
 }
 
-export function DemoBanner() {
-  const { demoMode, setDemoMode } = useApp();
-  if (!demoMode) return null;
-  return (
-    <div
-      style={{
-        background: "var(--amber-soft)",
-        borderBottom: "1px solid var(--warn-line)",
-        color: "var(--warn)",
-        fontSize: 13,
-        fontWeight: 600,
-        padding: "7px 26px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-      }}
-    >
-      <Icon name="eye" size={15} />
-      Mod DEMO — explorezi date de prezentare, fără cont. Modificările nu se salvează.
-      <button
-        onClick={() => setDemoMode(false)}
-        style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--warn)", fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
-      >
-        Ieși din DEMO
-      </button>
-    </div>
-  );
-}

@@ -5,6 +5,9 @@ import { Btn } from "../components/ui";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app-context";
 
+// Showcase law the "co-autor de lege" demo lands in (matches the seeded main project).
+const DEMO_LAW_SLUG = "transparenta-preturilor-medicamentelor-compensate";
+
 export default function LoginScreen() {
   const navigate = useNavigate();
   const { setUser } = useApp();
@@ -22,6 +25,20 @@ export default function LoginScreen() {
       navigate("/");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Autentificare eșuată.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const demoLogin = async (role: "user" | "coauthor") => {
+    setBusy(true);
+    setError(null);
+    try {
+      const user = await api.demoLogin(role);
+      setUser(user);
+      navigate(role === "coauthor" ? `/editor/${DEMO_LAW_SLUG}` : "/");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Autentificare demo eșuată.");
     } finally {
       setBusy(false);
     }
@@ -60,7 +77,7 @@ export default function LoginScreen() {
         </div>
         <h1 style={{ fontSize: 20, fontWeight: 800, textAlign: "center", margin: "0 0 6px", color: "var(--ink)" }}>Bine ai revenit</h1>
         <p style={{ fontSize: 13.5, color: "var(--muted)", textAlign: "center", margin: "0 0 20px", lineHeight: 1.5 }}>
-          Autentifică-te pentru a edita proiecte. Pentru explorare, folosește <b>Mod DEMO</b> — nu cere cont.
+          Autentifică-te pentru a edita proiecte de lege.
         </p>
         <label style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)" }}>Email</label>
         <input type="email" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="maria.pop@email.ro" style={{ ...inputStyle, margin: "6px 0 14px" }} />
@@ -78,8 +95,24 @@ export default function LoginScreen() {
             Creează unul
           </Link>
         </p>
-        <p style={{ fontSize: 12, color: "var(--faint)", textAlign: "center", marginTop: 10 }}>
-          Pentru explorare, folosește <b>Mod DEMO</b> — nu cere cont. Cont demo: <code>demo</code> / <code>demo</code>.
+
+        {/* Demo entry points — replace the old "Mod DEMO" toggle. No cont needed. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0 14px" }}>
+          <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--faint)", letterSpacing: ".04em" }}>SAU EXPLOREAZĂ DEMO</span>
+          <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+        </div>
+        <div style={{ display: "grid", gap: 8 }}>
+          <Btn variant="soft" size="lg" icon="eye" type="button" disabled={busy} onClick={() => demoLogin("user")} style={{ width: "100%", justifyContent: "center" }}>
+            Intră ca un utilizator
+          </Btn>
+          <Btn variant="soft" size="lg" icon="user" type="button" disabled={busy} onClick={() => demoLogin("coauthor")} style={{ width: "100%", justifyContent: "center" }}>
+            Intră ca un co-autor de lege
+          </Btn>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--faint)", textAlign: "center", marginTop: 12, lineHeight: 1.5 }}>
+          „Utilizator" explorează și pornește proiecte proprii. „Co-autor de lege" intră direct în editorul unei legi
+          existente, cu colaborare în timp real.
         </p>
       </form>
     </div>

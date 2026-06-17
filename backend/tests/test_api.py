@@ -43,6 +43,21 @@ def test_login_rejects_bad_credentials(seeded_client):
     assert seeded_client.post("/auth/login", json={"username": "demo", "password": "nope"}).status_code == 401
 
 
+def test_demo_login_user_cannot_edit_demo_law(seeded_client):
+    r = seeded_client.post("/auth/demo-login?role=user")
+    assert r.status_code == 200 and r.json()["username"] == "demo"
+    d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
+    assert d["is_demo"] is True and d["viewer_can_edit"] is False
+
+
+def test_demo_login_coauthor_can_edit_demo_law(seeded_client):
+    r = seeded_client.post("/auth/demo-login?role=coauthor")
+    assert r.status_code == 200 and r.json()["username"] == "radu.pavel"
+    d = seeded_client.get(f"/projects/{MAIN_SLUG}").json()
+    # DEMO law is editable by its seeded co-author (full editor + collaboration demo).
+    assert d["is_demo"] is True and d["viewer_can_edit"] is True
+
+
 def test_register_creates_user_and_logs_in(seeded_client):
     r = seeded_client.post(
         "/auth/register",

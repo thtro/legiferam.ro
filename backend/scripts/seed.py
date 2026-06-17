@@ -80,6 +80,13 @@ def ensure_users(db: Session, users: list[dict]) -> dict[str, User]:
             )
         )
         db.flush()
+
+    # Give the showcase-law co-author a password so the "intră ca un co-autor de
+    # lege" demo login can sign in and edit the seeded project end-to-end.
+    coauthor = by_username.get(settings.demo_coauthor_user)
+    if coauthor:
+        coauthor.password_hash = hash_password(settings.demo_coauthor_pass)
+        db.flush()
     return by_username
 
 

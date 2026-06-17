@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { DemoBanner, TopNav } from "../components/chrome";
+import { TopNav } from "../components/chrome";
 import { Btn, Icon, StatusBadge } from "../components/ui";
 import { api } from "../lib/api";
 import { DEFAULT_DOMAINS } from "../lib/constants";
@@ -27,7 +27,6 @@ export default function LandingScreen() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <TopNav active="landing" />
-      <DemoBanner />
       <div className="lf-scroll" style={{ flex: 1, overflowY: "auto", background: "var(--paper)" }}>
         {/* hero */}
         <section style={{ background: "var(--navy-deep)", color: "#fff", position: "relative", overflow: "hidden" }}>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { DemoBanner, TopNav } from "../components/chrome";
+import { TopNav } from "../components/chrome";
 import { Avatar, Btn, Icon } from "../components/ui";
 import { api } from "../lib/api";
 import { Dotted } from "./Project";
@@ -29,7 +29,6 @@ export default function AmendmentScreen() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <TopNav active="project" />
-      <DemoBanner />
       <div className="lf-scroll" style={{ flex: 1, overflowY: "auto", background: "var(--paper)" }}>
         <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
           <div style={{ maxWidth: 1080, margin: "0 auto", padding: "16px 32px", display: "flex", alignItems: "center", gap: 14 }}>

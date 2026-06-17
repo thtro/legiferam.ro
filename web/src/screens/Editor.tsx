@@ -75,7 +75,7 @@ const MOTIVE_REQUIRED = MOTIVE_FIELDS.filter((f) => f.required).map((f) => f.key
 export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
   const params = useParams();
   const navigate = useNavigate();
-  const { user, demoMode } = useApp();
+  const { user } = useApp();
   const slug = mode === "work" ? params.slug ?? DEMO_SLUG : null;
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
@@ -103,7 +103,9 @@ export default function EditorScreen({ mode }: { mode: "new" | "work" }) {
 
   const passed = checklist.filter((c) => c.state === "ok" || c.ignored).length;
   const total = checklist.length || 12;
-  const canEdit = !!user && !project?.is_demo && !demoMode;
+  // The backend decides edit rights (curator / co-initiator). DEMO laws are editable
+  // by their seeded co-authors so the "co-autor de lege" demo can use the full editor.
+  const canEdit = !!user && !!project?.viewer_can_edit;
 
   // Real-time collaboration (presence, per-article locks, live chat) — only for
   // initiators of a real project. Remote saves trigger a reload of the tree.

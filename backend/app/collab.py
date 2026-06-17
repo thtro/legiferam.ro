@@ -12,8 +12,12 @@ EDITOR_ROLES = {"Curator", "Co-autor"}
 
 
 def is_initiator(db: Session, project: Project, user: User | None) -> bool:
-    """True if the user is the curator or a co-initiator (Co-autor) of the project."""
-    if not user or project.is_demo:
+    """True if the user is the curator or a co-initiator (Co-autor) of the project.
+
+    DEMO projects are editable by their seeded initiators too, so the
+    "intră ca un co-autor de lege" demo login can experience the full editor and
+    real-time collaboration. Edits to DEMO data are ephemeral (wiped on re-seed)."""
+    if not user:
         return False
     if project.curator_id == user.id:
         return True

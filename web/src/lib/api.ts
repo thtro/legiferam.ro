@@ -40,6 +40,8 @@ export const api = {
     req<User>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   register: (body: { email: string; first_name: string; last_name: string; password: string }) =>
     req<User>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
+  demoLogin: (role: "user" | "coauthor") =>
+    req<User>(`/auth/demo-login?role=${role}`, { method: "POST" }),
   logout: () => req<{ ok: boolean }>("/auth/logout", { method: "POST" }),
   me: () => req<User | null>("/auth/me"),
 

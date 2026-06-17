@@ -37,7 +37,12 @@ versioned, with amendments (pull-requests) and reviews. Three pillars:
 - Register/login with **email + first/last name** (no email verification yet); session is a
   JWT in an httpOnly cookie. Demo account `demo` / `demo`. Clean seam for Google OAuth later
   (`User.provider` / `external_id`).
-- **Mod DEMO**: public, login-free showcase reading the seeded data.
+- **Two one-click demo logins** on the login screen (`POST /auth/demo-login?role=user|coauthor`):
+  - **Intră ca un utilizator** → the generic `demo` explorer account (browse + start own projects).
+  - **Intră ca un co-autor de lege** → the showcase law's seeded co-author (`radu.pavel`); lands
+    straight in the editor with edit rights + real-time collaboration. DEMO laws are editable by
+    their seeded initiators only (edits are ephemeral — wiped on re-seed). The old standalone
+    "Mod DEMO" toggle/banner was removed in favour of these.
 
 **Editor (5-step wizard)** — `web/src/screens/Editor.tsx`
 1. **Tip act** — choose act type (lege ordinară/organică, OUG/HG; last two disabled).
@@ -202,15 +207,18 @@ Prompts are versioned in `backend/app/ai/prompts/`. Behaviour is controlled by e
 - **Initiators** (curator + co-authors): edit the law, set vigoare/motives, run AI, see the
   real-time room (presence/locks/chat).
 - **Curator** only: publish, add co-authors, decide on amendments.
-- **DEMO projects** are read-only.
+- **DEMO projects** are read-only to the public and to the generic `demo` user, but **editable by
+  their seeded initiators** (so the "co-autor de lege" demo login can drive the full editor). Edits
+  are ephemeral — wiped on the next seed.
 
 ## 10. Testing
 
 ```bash
 make test        # backend suite (pytest) — runs in the api container against in-memory SQLite
 ```
-45+ tests cover the validator, seed, the full API (auth, projects, draft/publish, co-authors,
-amendments, ignore, support/watch, AI scripted paths, bulk insert) and a WebSocket smoke test.
+47+ tests cover the validator, seed, the full API (auth incl. both demo-login roles, projects,
+draft/publish, co-authors, amendments, ignore, support/watch, AI scripted paths, bulk insert) and
+a WebSocket smoke test.
 The test fixture forces scripted AI so the suite is deterministic regardless of the runtime key.
 
 There is no frontend unit-test suite yet; verify the web app via `npm --prefix web run build`
@@ -219,7 +227,8 @@ There is no frontend unit-test suite yet; verify the web app via `npm --prefix w
 ## 11. Environment variables
 
 See [.env.example](.env.example). Key ones: `DATABASE_URL`, `DEMO_USER`/`DEMO_PASS`,
-`JWT_SECRET`, `OPENROUTER_API_KEY`/`OPENROUTER_MODEL`, `AI_DEMO_SCRIPTED`, `WEB_PORT`.
+`DEMO_COAUTHOR_USER`/`DEMO_COAUTHOR_PASS`, `JWT_SECRET`,
+`OPENROUTER_API_KEY`/`OPENROUTER_MODEL`, `AI_DEMO_SCRIPTED`, `WEB_PORT`.
 **Never commit `.env`** (gitignored). Production uses its own file from
 [.env.production.example](.env.production.example).
 

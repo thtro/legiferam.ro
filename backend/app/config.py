@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     # Auth (MVP/Demo)
     demo_user: str = "demo"
     demo_pass: str = "demo"
+    # The showcase-law co-author the "intră ca un co-autor de lege" button signs in as.
+    # Must match a contributor (EDITOR_ROLES) of the seeded main project.
+    demo_coauthor_user: str = "radu.pavel"
+    demo_coauthor_pass: str = "demo"
     jwt_secret: str = "change-me-to-a-long-random-string"
     jwt_expire_minutes: int = 720
     jwt_algorithm: str = "HS256"

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DemoBanner, TopNav } from "../components/chrome";
+import { TopNav } from "../components/chrome";
 import { ActBadge, Btn, Icon } from "../components/ui";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app-context";
@@ -22,7 +22,6 @@ export default function MyProjectsScreen() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <TopNav active="project" />
-      <DemoBanner />
       <div className="lf-scroll" style={{ flex: 1, overflowY: "auto", background: "var(--paper)" }}>
         <div style={{ maxWidth: 880, margin: "0 auto", padding: "36px 32px 64px" }}>
           <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22 }}>
